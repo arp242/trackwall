@@ -1,0 +1,3 @@
+syntax: glob
+pkg
+src/github.com

@@ -1,0 +1,129 @@
+# Syntax:
+# - Comments start with #
+# - You can use \ as line continuation characters
+
+#####################
+### Basic options ###
+#####################
+
+# Listens on TCP and UDP
+dns-listen 127.0.0.53:53
+
+# Forward unbocked requests to this nameserver.
+# TODO: We should be able to automatically use the correct value from
+# /etc/resolv.conf
+dns-forward 127.0.1.1:53
+
+# We serve no-op or "surrogate" scripts from a HTTP server
+http-listen 127.0.0.53:80
+https-listen 127.0.0.53:443
+
+# Needed for https. Doing a "real" vertified certificate for every domain is
+# obviously not possible, so you'll want to add this to your browser.
+#
+# You can make your own cert with:
+#  $ go run /usr/share/go/src/crypto/tls/generate_cert.go --host 127.0.0.53 --duration 20y   
+https-cert cert.pem
+https-key key.pem
+
+# Run as this user
+user _dnsblock
+
+# Chroot directory (this is an empty directory)
+chroot /var/run/dnsblock
+
+####################
+### Adding hosts ###
+####################
+
+# Cache remote hosts files for a week, this is useful for desktops and such
+# which may be turned on and off several times a day.
+cache-hosts 1w
+
+# The format is:
+#   hostlist format url
+#
+# Where format is any of:
+#   plain − One host per line. No comments
+#   hosts − /etc/hosts, comments and the destination address are ignored.
+hostlist plain http://pgl.yoyo.org/adservers/serverlist.php?hostformat=plain&showintro=0&mimetype=plaintext 
+hostlist hosts http://winhelp2002.mvps.org/hosts.txt
+hostlist hosts http://www.malwaredomainlist.com/hostslist/hosts.txt
+hostlist hosts http://someonewhocares.org/hosts/hosts
+
+# Local file; remember that dnsblock uses chroot()
+#hostlist hosts file:///hosts
+
+
+####################
+### noop scripts ###
+####################
+
+# Some sites will break when they can't load some JavaScript. It'll error out
+# and none of the JavaScript works (which in some cases means the entire site
+# stops working).
+# To fix this, dnsblock can serve "noop scripts", the format is simple:
+#
+#   noop domain_regex JavaScript to serve
+#
+# @@ will be replaced by function(){}
+
+# http://s7.addthis.com/js/300/addthis_widget.js
+#noop ^s\d+\.addthis\.com$ \
+#	addthis={init:@@,layers:@@,toolbox:@@,button:@@,counter:@@}
+
+
+### TODO: implement the below
+
+#http://malwaredomains.lehigh.edu/files/justdomains.zip
+
+# Regexps
+#regexplist file:///home/martin/regexps
+
+# If you just want to block a few hosts, you can add rules here as well:
+#host facebook.com
+#host twitter.com
+
+# Does a hostlist have hosts you would like to keep? Override them!
+#unhost addthis.com
+#unhostlist plain file://myunhosts
+
+# Or regexps:
+
+#regexp ^count(er)?[0-9]+?\.
+#regexp ^banners?[0-9]+?\.
+#regexp ^ad(s|srv|serv|serve|server|v|vert)?[0-9]+?\.
+#regexp ^clicks?\.
+#regexp ^[a-z][0-9]+\.[a-z]\.akamaiedge\.net
+#regexp ^[a-z][0-9]+\.[a-z]\.akastream\.net
+#regexp ^[a-z][0-9]+\.[a-z]\.akamaitech\.net
+#regexp ^[a-z][0-9]+\.[a-z]\.a\.yimg\.com
+#regexp ^[a-z][0-9]+\.[a-z]\.ak\.nbci\.com
+#regexp ^pub[0-9]\.
+#regexp ^stats\.
+#regexp ^s[0-9]\.sitemeter\.com
+#regexp ^s[0-9]\.cnzz\.com
+
+#regexp ^u.*\.spylog\.com
+
+# domains
+#regexp 247realmedia\.com
+#regexp \.2o7\.net
+#regexp advserv
+#regexp adbrite
+#regexp adbureau\.net
+#regexp adultfriendfinder\.com
+#regexp adtech\.com$
+#regexp casalemedia
+#regexp clickbank
+#regexp clickzs\.com$
+#regexp cybermonitor\.com
+#regexp cqcounter\.com
+#regexp liveadvert
+#regexp dynamic\.dol\.ru
+#regexp doubleclick
+#regexp erasercash
+#regexp fastclick
+
+#regexp adhese\.com
+#regexp disqus\.com
