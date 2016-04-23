@@ -6,10 +6,13 @@
 ### Basic options ###
 #####################
 
+# Used for controlling the server
+control-listen 127.0.0.53:23
+
 # Listens on TCP and UDP
 dns-listen 127.0.0.53:53
 
-# Forward unbocked requests to this nameserver.
+# Forward allowed requests to this nameserver.
 # TODO: We should be able to automatically use the correct value from
 # /etc/resolv.conf
 dns-forward 127.0.1.1:53
@@ -18,18 +21,14 @@ dns-forward 127.0.1.1:53
 http-listen 127.0.0.53:80
 https-listen 127.0.0.53:443
 
-# Needed for https. Doing a "real" vertified certificate for every domain is
-# obviously not possible, so you'll want to add this to your browser.
-#
-# You can make your own cert with:
-#  $ go run /usr/share/go/src/crypto/tls/generate_cert.go --host 127.0.0.53 --duration 20y   
+# Root cert
 https-cert cert.pem
 https-key key.pem
 
 # Run as this user
 user _dnsblock
 
-# Chroot directory (this is an empty directory)
+# Chroot directory
 chroot /var/run/dnsblock
 
 ####################
@@ -46,53 +45,69 @@ cache-hosts 1w
 # Where format is any of:
 #   plain − One host per line. No comments
 #   hosts − /etc/hosts, comments and the destination address are ignored.
+#
+# Don't worry about duplicates. Only one is host is stored.
+
+# These domains are used for serving malware, phising, and other sneaky shit.
+# You probably want to keep them. Many browsers already have some built-in
+# protection for this these days, but some extra protection can't hurt.
+hostlist plain http://malwaredomains.lehigh.edu/files/justdomains
+hostlist hosts http://www.malwaredomainlist.com/hostslist/hosts.txt
+
+# These are a mix of ad domains, malware domains, "shock sites", and other stuff
+# that most people don't want to need to visit.
 hostlist plain http://pgl.yoyo.org/adservers/serverlist.php?hostformat=plain&showintro=0&mimetype=plaintext 
 hostlist hosts http://winhelp2002.mvps.org/hosts.txt
-hostlist hosts http://www.malwaredomainlist.com/hostslist/hosts.txt
 hostlist hosts http://someonewhocares.org/hosts/hosts
+
+host acdn.adnxs.com
+regexp ^.*\.symcb\.com$
+
+
+# vk.nl
+# forward  persgroep-ams.gravityrd-services.com
+# stackoverflow.com
+#forward  ssum-sec.casalemedia.com
+
 
 # Local file; remember that dnsblock uses chroot()
 #hostlist hosts file:///hosts
 
+# If you just want to block a few hosts, you can add rules here as well
+#host conservapedia.com
 
-####################
-### noop scripts ###
-####################
+# Or multiple work as well
+#host facebook.com twitter.com
 
-# Some sites will break when they can't load some JavaScript. It'll error out
-# and none of the JavaScript works (which in some cases means the entire site
-# stops working).
-# To fix this, dnsblock can serve "noop scripts", the format is simple:
+# Does a hostlist have hosts you would like to keep? Remove them!
+# TODO: Make this a regexp
+#unhost www.addthis.com
+#unhost str www.addthis.com
+#unhost regexp .*addthis\.com$
+
+# Or from a file, same syntax as hostlist (can also be remote)
+#unhostlist plain file:///myunhosts
+
+###############################################
+### Blocking hosts from regular expressions ###
+###############################################
+
+# You can also block hosts with regular expressions.
 #
-#   noop domain_regex JavaScript to serve
+# Note that this is a lot slower than using a static hosts file (which is a
+# constant-time map lookup), since we need to iterate over the entire array and
+# see if an expression matches on every DNS lookup (we do some caching to speed
+# up subsequent lookups though).
 #
-# @@ will be replaced by function(){}
-
-# http://s7.addthis.com/js/300/addthis_widget.js
-#noop ^s\d+\.addthis\.com$ \
-#	addthis={init:@@,layers:@@,toolbox:@@,button:@@,counter:@@}
-
-
-### TODO: implement the below
-
-#http://malwaredomains.lehigh.edu/files/justdomains.zip
 
 # Regexps
 #regexplist file:///home/martin/regexps
 
-# If you just want to block a few hosts, you can add rules here as well:
-#host facebook.com
-#host twitter.com
-
-# Does a hostlist have hosts you would like to keep? Override them!
-#unhost addthis.com
-#unhostlist plain file://myunhosts
-
 # Or regexps:
 
-#regexp ^count(er)?[0-9]+?\.
-#regexp ^banners?[0-9]+?\.
-#regexp ^ad(s|srv|serv|serve|server|v|vert)?[0-9]+?\.
+regexp ^count(er)?[0-9]+?\.
+regexp ^banners?[0-9]+?\.
+regexp ^ad(s|srv|serv|serve|server|v|vert)?[0-9]+?\.
 #regexp ^clicks?\.
 #regexp ^[a-z][0-9]+\.[a-z]\.akamaiedge\.net
 #regexp ^[a-z][0-9]+\.[a-z]\.akastream\.net
@@ -112,7 +127,6 @@ hostlist hosts http://someonewhocares.org/hosts/hosts
 #regexp advserv
 #regexp adbrite
 #regexp adbureau\.net
-#regexp adultfriendfinder\.com
 #regexp adtech\.com$
 #regexp casalemedia
 #regexp clickbank
@@ -125,5 +139,37 @@ hostlist hosts http://someonewhocares.org/hosts/hosts
 #regexp erasercash
 #regexp fastclick
 
-#regexp adhese\.com
-#regexp disqus\.com
+regexp ^.*\.adhese\.com$
+regexp ^.*\.disqus\.com$
+regexp ^.*\.facebook\.com$
+regexp ^.*\.instagram\.com$
+regexp ^.*\.twitter\.com$
+
+
+#########################
+### Surrogate scripts ###
+#########################
+
+# Some sites will break when they can't load some JavaScript. It'll error out
+# and none of the JavaScript works (which in some cases means the entire site
+# stops working).
+# To fix this, dnsblock can serve surrogate scripts, the format is simple:
+#
+#   surrogate domain_regex JavaScript to serve
+#
+# @@ will be replaced by function(){}
+
+# AddThis
+surrogate ^s\d+\.addthis\.com$ \
+	addthis={init:@@,layers:@@,toolbox:@@,button:@@,counter:@@}
+
+# Google tag manager
+surrogate .*googletag(manager|services)\.com$ \
+	var googletag; \
+	googletag={ \
+	cmd:{push:@@}, enableServices:@@, refresh:@@, defineOutOfPageSlot:@@, \
+	setTargeting:@@, display:@@, setRefreshUnfilledSlots:@@, \
+	enableAsyncRendering:@@, enableSyncRendering:@@, enableSingleRequest:@@, \
+	collapseEmptyDivs:@@, defineSlot:function(){return googletag}, \
+	addService:function(){return googletag}, companionAds:function(){return \
+	googletag}, pubads:function(){return googletag}}
