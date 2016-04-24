@@ -8,6 +8,7 @@ import (
 )
 
 var _usage = map[string]string{
+	// Global opts
 	"global_opts": `
 Global options:
     -v, --verbose   Verbose output
@@ -16,14 +17,17 @@ Global options:
 
 `,
 
+	// Global
 	"global": `
 Usage: %[1]s command [arguments]
 
 Commands:
     help      Show this help
-	version   Show version and exit
+    version   Show version and exit
     server    Run as DNS/HTTP server
     status    Show server status
+
+    cache     Control cache
     host      Control host list
     regex     Control regexp list
 
@@ -32,6 +36,7 @@ Commands:
 Use %[1]s [command] -h for more help on a specific command.
 `,
 
+	// Server
 	"server": `
 Usage: %[1]s server [arguments]
 
@@ -51,6 +56,12 @@ Usage: %[1]s host [arguments]
 `,
 
 	"regex": `
+Usage: %[1]s regex [arguments]
+
+%[2]s
+`,
+
+	"cache": `
 Usage: %[1]s regex [arguments]
 
 %[2]s

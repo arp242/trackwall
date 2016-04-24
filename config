@@ -1,29 +1,50 @@
-# Syntax:
-# - Comments start with #
-# - You can use \ as line continuation characters
+# Comments start with #. 
+# 
+# All options are in the form of "key value1 [value2 ...]"
+# 
+# All options can be split over multiple lines by indenting the next lines with
+# one or more spaces or tabs (the amount don't matter). So this:
+#
+# user
+#   _dnsblock
+#
+# is the same as:
+#
+# user _dnsblock
+#
+# Note that option keys *must not* have leading whitespace, this:
+#
+# user _dnsblock
+#  chroot /var/run/dnsblock
+#
+# is seen as:
+#
+# user _dnsblock chroot /var/run/dnsblock
+#
+# Which is an error, since the user option takes only one argument.
+#
 
 #####################
 ### Basic options ###
 #####################
 
 # Used for controlling the server
-control-listen 127.0.0.53:23
+control-listen 127.0.0.54:22
 
 # Listens on TCP and UDP
 dns-listen 127.0.0.53:53
 
 # Forward allowed requests to this nameserver.
-# TODO: We should be able to automatically use the correct value from
-# /etc/resolv.conf
 dns-forward 127.0.1.1:53
 
 # We serve no-op or "surrogate" scripts from a HTTP server
 http-listen 127.0.0.53:80
 https-listen 127.0.0.53:443
 
-# Root cert
-https-cert cert.pem
-https-key key.pem
+# Root cert; relative to chroot()
+# Keep these private!
+root-cert /rootCA.pem
+root-key /rootCA.key
 
 # Run as this user
 user _dnsblock
@@ -35,8 +56,8 @@ chroot /var/run/dnsblock
 ### Adding hosts ###
 ####################
 
-# Cache remote hosts files for a week, this is useful for desktops and such
-# which may be turned on and off several times a day.
+# Cache remote hosts files for a week, this is especially useful for desktops
+# and such which may be turned on and off several times a day.
 cache-hosts 1w
 
 # The format is:
@@ -60,33 +81,14 @@ hostlist plain http://pgl.yoyo.org/adservers/serverlist.php?hostformat=plain&sho
 hostlist hosts http://winhelp2002.mvps.org/hosts.txt
 hostlist hosts http://someonewhocares.org/hosts/hosts
 
-host acdn.adnxs.com
-regexp ^.*\.symcb\.com$
-
-
-# vk.nl
-# forward  persgroep-ams.gravityrd-services.com
-# stackoverflow.com
-#forward  ssum-sec.casalemedia.com
-
-
-# Local file; remember that dnsblock uses chroot()
+# You can also use a local file; remember that dnsblock uses chroot()!
 #hostlist hosts file:///hosts
 
 # If you just want to block a few hosts, you can add rules here as well
 #host conservapedia.com
 
 # Or multiple work as well
-#host facebook.com twitter.com
-
-# Does a hostlist have hosts you would like to keep? Remove them!
-# TODO: Make this a regexp
-#unhost www.addthis.com
-#unhost str www.addthis.com
-#unhost regexp .*addthis\.com$
-
-# Or from a file, same syntax as hostlist (can also be remote)
-#unhostlist plain file:///myunhosts
+#host twitter.com www.twitter.com
 
 ###############################################
 ### Blocking hosts from regular expressions ###
@@ -101,49 +103,34 @@ regexp ^.*\.symcb\.com$
 #
 
 # Regexps
-#regexplist file:///home/martin/regexps
+# Only plain is supported
+#regexplist plain file:///home/martin/regexps
 
-# Or regexps:
+# Or just here; multiple regexps can be separated by whitespace.
+regexp
+	^count(er)?[0-9]+?\.
+	^banners?[0-9]+?\.
+	^ad(s|srv|serv|serve|server|v|vert)?[0-9]+?\.
 
-regexp ^count(er)?[0-9]+?\.
-regexp ^banners?[0-9]+?\.
-regexp ^ad(s|srv|serv|serve|server|v|vert)?[0-9]+?\.
-#regexp ^clicks?\.
-#regexp ^[a-z][0-9]+\.[a-z]\.akamaiedge\.net
-#regexp ^[a-z][0-9]+\.[a-z]\.akastream\.net
-#regexp ^[a-z][0-9]+\.[a-z]\.akamaitech\.net
-#regexp ^[a-z][0-9]+\.[a-z]\.a\.yimg\.com
-#regexp ^[a-z][0-9]+\.[a-z]\.ak\.nbci\.com
-#regexp ^pub[0-9]\.
-#regexp ^stats\.
-#regexp ^s[0-9]\.sitemeter\.com
-#regexp ^s[0-9]\.cnzz\.com
+#########################
+### Customizing hosts ###
+#########################
 
-#regexp ^u.*\.spylog\.com
+# Does a hostlist have hosts you would like to keep? Remove them! unhost takes a
+# regexp and removes all hosts that match it. It's always executed *after*
+# loading all the hostsfile (so putting this at the top of this file would work
+# just as well).
+#unhost .*addthis\.com$
 
-# domains
-#regexp 247realmedia\.com
-#regexp \.2o7\.net
-#regexp advserv
-#regexp adbrite
-#regexp adbureau\.net
-#regexp adtech\.com$
-#regexp casalemedia
-#regexp clickbank
-#regexp clickzs\.com$
-#regexp cybermonitor\.com
-#regexp cqcounter\.com
-#regexp liveadvert
-#regexp dynamic\.dol\.ru
-#regexp doubleclick
-#regexp erasercash
-#regexp fastclick
+# You can also load it from a file (which can be remote).
+#unhostlist plain file:///myunhosts
 
-regexp ^.*\.adhese\.com$
-regexp ^.*\.disqus\.com$
-regexp ^.*\.facebook\.com$
-regexp ^.*\.instagram\.com$
-regexp ^.*\.twitter\.com$
+# The same can be done for regexps. Note that this is *not* a regexp (matching
+# regexps with a regexp is a bit of a mindfuck).
+#unregexp ^count(er)?[0-9]+?\.
+
+# And again, from a file
+#unregexplist file:///unregexps
 
 
 #########################
@@ -160,16 +147,25 @@ regexp ^.*\.twitter\.com$
 # @@ will be replaced by function(){}
 
 # AddThis
-surrogate ^s\d+\.addthis\.com$ \
+surrogate ^s\d+\.addthis\.com$
 	addthis={init:@@,layers:@@,toolbox:@@,button:@@,counter:@@}
 
 # Google tag manager
-surrogate .*googletag(manager|services)\.com$ \
-	var googletag; \
-	googletag={ \
-	cmd:{push:@@}, enableServices:@@, refresh:@@, defineOutOfPageSlot:@@, \
-	setTargeting:@@, display:@@, setRefreshUnfilledSlots:@@, \
-	enableAsyncRendering:@@, enableSyncRendering:@@, enableSingleRequest:@@, \
-	collapseEmptyDivs:@@, defineSlot:function(){return googletag}, \
-	addService:function(){return googletag}, companionAds:function(){return \
-	googletag}, pubads:function(){return googletag}}
+surrogate .*googletag(manager|services)\.com$
+	var googletag;
+	googletag={
+	enableServices:@@, refresh:@@, defineOutOfPageSlot:@@, setTargeting:@@,
+	display:@@, setRefreshUnfilledSlots:@@, enableAsyncRendering:@@,
+	enableSyncRendering:@@, enableSingleRequest:@@, collapseEmptyDivs:@@,
+	cmd:{push:@@},
+	defineSlot:function(){return googletag},
+	addService:function(){return googletag},
+	companionAds:function(){return googletag},
+	pubads:function(){return googletag}
+	}
+
+###########################
+### Add your own config ###
+###########################
+
+source config.local

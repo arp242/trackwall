@@ -1,7 +1,7 @@
-// The DNS stuff
-//
 // Copyright © 2016 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
+
+// The DNS stuff
 package main
 
 import (
@@ -16,12 +16,12 @@ import (
 // Setup DNS server
 func listenDns() (dns.Server, dns.Server) {
 	dns.HandleFunc(".", handleDns)
-	dns_udp := dns.Server{Addr: joinAddr(_config.dns_listen), Net: "udp"}
+	dns_udp := dns.Server{Addr: _config.dns_listen.String(), Net: "udp"}
 	go func() {
 		err := dns_udp.ListenAndServe()
 		fatal(err)
 	}()
-	dns_tcp := dns.Server{Addr: joinAddr(_config.dns_listen), Net: "tcp"}
+	dns_tcp := dns.Server{Addr: _config.dns_listen.String(), Net: "tcp"}
 	go func() {
 		err := dns_tcp.ListenAndServe()
 		fatal(err)
@@ -32,6 +32,13 @@ func listenDns() (dns.Server, dns.Server) {
 
 // Handle a DNS request
 func handleDns(w dns.ResponseWriter, req *dns.Msg) {
+	for {
+		if !_config.locked {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	// Make sure we're using the correct uid in the callback; this is sometimes
 	// still 0 on the first few requests due to the Setresuid() being called
 	// after the goroutines that start the servers.
@@ -45,7 +52,7 @@ func handleDns(w dns.ResponseWriter, req *dns.Msg) {
 	// We only need to spoof A and AAAA records
 	t := dns.TypeToString[req.Question[0].Qtype]
 	if t != "A" && t != "AAAA" {
-		forward(joinAddr(_config.dns_forward), w, req)
+		forward(_config.dns_forward.String(), w, req)
 		return
 	}
 
@@ -76,7 +83,7 @@ func handleDns(w dns.ResponseWriter, req *dns.Msg) {
 		if !have_cache {
 			info(fmt.Sprintf("forward  %v", name))
 		}
-		forward(joinAddr(_config.dns_forward), w, req)
+		forward(_config.dns_forward.String(), w, req)
 	case RESPONSE_SPOOF:
 		if !have_cache {
 			info(fmt.Sprintf("spoof    %v", name))
@@ -137,7 +144,7 @@ func determineResponse(name, t string) uint8 {
 // Spoof DNS response by replying with the address of our HTTP server. This only
 // does A records.
 func spoof(name string, w dns.ResponseWriter, req *dns.Msg) {
-	spec := fmt.Sprintf("%s. 1 IN A %s", name, _config.http_listen[0])
+	spec := fmt.Sprintf("%s. 1 IN A %s", name, _config.http_listen.host)
 	rr, err := dns.NewRR(spec)
 	fatal(err)
 

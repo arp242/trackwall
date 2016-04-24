@@ -1,10 +1,15 @@
-// The control socket
-//
-// The syntax is the same as the config file.
-//
 // Copyright © 2016 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
+
+// The control socket
 package main
+
+
+// http://127.0.0.54
+//
+// GET /list
+// GET /list/config
+// GET /list/hosts
 
 func listenCtl() {
 }

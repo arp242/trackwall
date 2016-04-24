@@ -1,6 +1,9 @@
 syntax: glob
-dnsblock
-pkg
-src/github.com
-src/golang.org
 .nfs*
+
+syntax: regexp
+^dnsblock
+^pkg
+^src/github.com/
+^src/golang.org/
+^config\.local

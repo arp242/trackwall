@@ -1,11 +1,12 @@
-// DNS proxy which can spoof responses to block ads and malicious websites.
-//
 // Copyright © 2016 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
+
+// DNS proxy which can spoof responses to block ads and malicious websites.
 package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"regexp"
@@ -52,6 +53,8 @@ var (
 )
 
 func main() {
+	log.SetFlags(log.Lshortfile)
+
 	// No command, print help
 	if len(os.Args) < 2 {
 		usage("global", "")
@@ -74,13 +77,15 @@ func main() {
 	case "version":
 		fmt.Println("0.1")
 	case "server":
-		sources := parseConfig("config")
-		listen(sources)
+		_config.parse("config")
+		listen()
 	case "status":
 		fmt.Println("TODO")
 	case "host":
 		fmt.Println("TODO")
 	case "regex":
+		fmt.Println("TODO")
+	case "cache":
 		fmt.Println("TODO")
 	default:
 		usage("global", "invalid command "+os.Args[1])
@@ -88,7 +93,7 @@ func main() {
 }
 
 // Start servers
-func listen(sources sources_t) {
+func listen() {
 	chroot()
 
 	// Setup servers
@@ -98,7 +103,7 @@ func listen(sources sources_t) {
 	defer dns_udp.Shutdown()
 	defer dns_tcp.Shutdown()
 
-	// Remove old cache items
+	// Remove old cache items every 5 minutes.
 	go func() {
 		for {
 			time.Sleep(5 * time.Minute)
@@ -131,7 +136,9 @@ func listen(sources sources_t) {
 
 	// Read the hosts information *after* starting the DNS server because we can
 	// add hosts from remote sources (and thus needs DNS)
-	readSources(sources)
+	_config.sources.read()
+	_config.locked = false
+	info("initialisation finished")
 
 	// Wait for SIGINT or SIGTERM
 	sigs := make(chan os.Signal, 1)
@@ -143,7 +150,7 @@ func listen(sources sources_t) {
 func chroot() {
 	info(fmt.Sprintf("chrooting to %v", _config.chroot))
 	fatal(os.MkdirAll(_config.chroot, 0755))
-	fatal(os.Chown(_config.chroot, _config.uid, _config.gid))
+	fatal(os.Chown(_config.chroot, _config.user.uid, _config.user.gid))
 	fatal(os.Chdir(_config.chroot))
 	fatal(syscall.Chroot(_config.chroot))
 
@@ -152,7 +159,7 @@ func chroot() {
 	fatal(err)
 	fp, err := os.Create("/etc/resolv.conf")
 	defer fp.Close()
-	fp.Write([]byte(fmt.Sprintf("nameserver %s", _config.dns_listen[0])))
+	fp.Write([]byte(fmt.Sprintf("nameserver %s", _config.dns_listen.host)))
 }
 
 // The MIT License (MIT)

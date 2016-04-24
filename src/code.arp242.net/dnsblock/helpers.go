@@ -1,7 +1,7 @@
-// Various helper functions used throughout the application.
-//
 // Copyright © 2016 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
+
+// Various helper functions used throughout the application.
 package main
 
 import (
@@ -11,8 +11,6 @@ import (
 	"log"
 	"path/filepath"
 	"strconv"
-	"strings"
-	//"syscall"
 	syscall "golang.org/x/sys/unix"
 )
 
@@ -25,14 +23,10 @@ func realpath(path string) (string, error) {
 
 // Drop privileges
 func drop_privs() {
-	err := syscall.Setresgid(_config.gid, _config.gid, _config.gid)
+	err := syscall.Setresgid(_config.user.gid, _config.user.gid, _config.user.gid)
 	fatal(err)
-	err = syscall.Setresuid(_config.uid, _config.uid, _config.uid)
+	err = syscall.Setresuid(_config.user.uid, _config.user.uid, _config.user.uid)
 	fatal(err)
-}
-
-func joinAddr(addr []string) string {
-	return strings.Join(addr, ":")
 }
 
 // Convert a human-readable duration to the number of seconds. A "duration" is
