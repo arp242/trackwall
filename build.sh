@@ -11,7 +11,7 @@ export GOPATH="$root"
 [ -d "$root/src/github.com/davecgh/go-spew/spew" ] || go get -u github.com/davecgh/go-spew/spew
 [ -d "$root/src/golang.org/x/sys/unix" ] || go get -u golang.org/x/sys/unix
 
-go build -ldflags '-s -w' -x -v code.arp242.net/dnsblock
+go build -ldflags '-s -w' -x -v dnsblock
 #go build -x -v dnsblock
 
 set -x
