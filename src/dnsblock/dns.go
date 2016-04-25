@@ -14,14 +14,18 @@ import (
 )
 
 // Setup DNS server
-func listenDns() (dns.Server, dns.Server) {
+// TODO: Splitting out the binding of the socket and starting a server is not
+// easy, so we don't...
+func listenDns() (*dns.Server, *dns.Server) {
 	dns.HandleFunc(".", handleDns)
-	dns_udp := dns.Server{Addr: _config.dns_listen.String(), Net: "udp"}
+
+	dns_udp := &dns.Server{Addr: _config.dns_listen.String(), Net: "udp"}
 	go func() {
 		err := dns_udp.ListenAndServe()
 		fatal(err)
 	}()
-	dns_tcp := dns.Server{Addr: _config.dns_listen.String(), Net: "tcp"}
+
+	dns_tcp := &dns.Server{Addr: _config.dns_listen.String(), Net: "tcp"}
 	go func() {
 		err := dns_tcp.ListenAndServe()
 		fatal(err)
@@ -32,17 +36,17 @@ func listenDns() (dns.Server, dns.Server) {
 
 // Handle a DNS request
 func handleDns(w dns.ResponseWriter, req *dns.Msg) {
-	for {
-		if !_config.locked {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	name := strings.TrimRight(req.Question[0].Name, ".")
 
-	// Make sure we're using the correct uid in the callback; this is sometimes
-	// still 0 on the first few requests due to the Setresuid() being called
-	// after the goroutines that start the servers.
-	drop_privs()
+	// Wait until _hosts are loaded, except when downloading the host lists
+	if !_config.sources.hasDomain(name) {
+		for {
+			if !_config.locked {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 
 	if len(req.Question) == 0 {
 		dns.HandleFailed(w, req)
@@ -56,65 +60,118 @@ func handleDns(w dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 
-	name := strings.TrimRight(req.Question[0].Name, ".")
-	var response uint8
-
-	// Check cache
-	_cachelock.Lock()
-	cache, have_cache := _cache[name]
-	if have_cache && cache.expires > time.Now().Unix() {
-		response = cache.response
-	} else {
-		response = determineResponse(name, t)
-		have_cache = false
-
-		// TODO: Also cache ipv6
-		if t != "AAAA" {
-			// TODO: Don't hard-code the cache time to one hour.
-			_cache[name] = cache_t{expires: time.Now().Unix() + 3600, response: response}
-		}
-	}
-	_cachelock.Unlock()
-
-	//fmt.Printf("cache size: %v (about %v bytes)\n", len(_cache), len(_cache)*6)
-
+	response, from_cache := getResponse(name, t)
 	switch response {
 	case RESPONSE_FORWARD:
-		if !have_cache {
+		if !from_cache {
 			info(fmt.Sprintf("forward  %v", name))
 		}
 		forward(_config.dns_forward.String(), w, req)
 	case RESPONSE_SPOOF:
-		if !have_cache {
+		if !from_cache {
 			info(fmt.Sprintf("spoof    %v", name))
 		}
 		spoof(name, w, req)
-	case RESPONSE_NXDOMAIN:
-		if !have_cache {
-			//info(fmt.Sprintf("nxdomain %v", name))
+	case RESPONSE_EMPTY:
+		if !from_cache {
+			//info(fmt.Sprintf("empty  %v", name))
 		}
-		spoofNxdomain(name, w, req)
+		spoofEmpty(w, req)
 	}
+}
+
+// Get response from cache (if it exists and is not expired), or determine a new
+// response.
+func getResponse(name, t string) (response uint8, from_cache bool) {
+	// First check override
+	// TODO: It might be better/faster to clear cache entries when adding
+	// override?
+	if haveOverride(name) {
+		return RESPONSE_FORWARD, false
+	}
+
+	cachekey := t + " " + name
+	_cachelock.Lock()
+	cache, have_cache := _cache[cachekey]
+	_cachelock.Unlock()
+
+	if have_cache && cache.expires > time.Now().Unix() {
+		return cache.response, true
+	}
+
+	response = determineResponse(name, t)
+
+	_cachelock.Lock()
+	_cache[cachekey] = cache_t{
+		expires:  time.Now().Unix() + int64(_config.cache_dns),
+		response: response,
+	}
+	_cachelock.Unlock()
+
+	return response, false
+}
+
+func haveOverride(name string) bool {
+	// Check override
+	expires, have_override := _override_hosts[name]
+
+	if !have_override {
+		labels := strings.Split(name, ".")
+		c := ""
+		l := len(labels)
+		for i := 0; i < l; i += 1 {
+			if c == "" {
+				c = labels[l-i-1]
+			} else {
+				c = labels[l-i-1] + "." + c
+			}
+
+			expires, have_override = _override_hosts[c]
+			if have_override {
+				break
+			}
+		}
+	}
+
+	// Make sure it's not expires
+	if have_override {
+		if time.Now().Unix() > expires {
+			delete(_override_hosts, name)
+			have_override = false
+		}
+	}
+
+	return have_override
 }
 
 // Determine what to do with the hostname name. Returns a RESPONSE_* constant.
 func determineResponse(name, t string) uint8 {
 	var do_spoof bool
 
-	// TODO: This doesn't work very well since browsers cache the shit out of
-	// DNS; so we may want to use a HTTP proxy for this?
-	expires, have_override := _override_hosts[name]
+	have_override := haveOverride(name)
 	if have_override {
-		if time.Now().Unix() > expires {
-			delete(_override_hosts, name)
-			have_override = false
-		} else {
-			do_spoof = false
-		}
+		do_spoof = false
 	}
 
 	if !have_override {
-		_, do_spoof = _hosts[name]
+		// Hosts
+		labels := strings.Split(name, ".")
+		c := ""
+		l := len(labels)
+		for i := 0; i < l; i += 1 {
+			if c == "" {
+				c = labels[l-i-1]
+			} else {
+				c = labels[l-i-1] + "." + c
+			}
+
+			_, do_spoof = _hosts[c]
+			if do_spoof {
+				break
+			}
+		}
+
+		// Regexps
 		if !do_spoof {
 			for _, r := range _regexps {
 				if r.MatchString(name) {
@@ -126,14 +183,14 @@ func determineResponse(name, t string) uint8 {
 	}
 
 	// For now, we just pretend that AAAA records that we want to spoof don't
-	// exist (NXDOMAIN).
+	// exist (EMPTY).
 	// TODO: This could be better, but I'm not sure how to properly do this. We
 	// now listen on 127.0.0.53 to prevent interfering with existing DNS
 	// daemons, HTTP servers, etc. (/etc/resolv.conf doesn't support adding a
 	// port number). IPv6 only has one loopback address (::1) and nota /8 like
 	// IPv4...
 	if do_spoof && t == "AAAA" {
-		return RESPONSE_NXDOMAIN
+		return RESPONSE_EMPTY
 	} else if do_spoof {
 		return RESPONSE_SPOOF
 	} else {
@@ -148,29 +205,23 @@ func spoof(name string, w dns.ResponseWriter, req *dns.Msg) {
 	rr, err := dns.NewRR(spec)
 	fatal(err)
 
-	var msg dns.Msg
-	msg.MsgHdr.Id = req.MsgHdr.Id
-	msg.MsgHdr.Response = true
-	msg.MsgHdr.RecursionDesired = true
-	msg.MsgHdr.RecursionAvailable = true
-	msg.Question = req.Question
-	msg.Answer = []dns.RR{rr}
-	msg.Ns = []dns.RR{}
-	msg.Extra = []dns.RR{}
-
-	w.WriteMsg(&msg)
+	sendSpoof([]dns.RR{rr}, w, req)
 }
 
-// Spoof DNS response by replying with the NXDOMAIN rcode (and no answer).
-func spoofNxdomain(name string, w dns.ResponseWriter, req *dns.Msg) {
+// Spoof DNS response by replying with an empty answer section.
+func spoofEmpty(w dns.ResponseWriter, req *dns.Msg) {
+	sendSpoof([]dns.RR{}, w, req)
+}
+
+// Make a message with the answer and write it to the client
+func sendSpoof(answer []dns.RR, w dns.ResponseWriter, req *dns.Msg) {
 	var msg dns.Msg
 	msg.MsgHdr.Id = req.MsgHdr.Id
 	msg.MsgHdr.Response = true
 	msg.MsgHdr.RecursionDesired = true
 	msg.MsgHdr.RecursionAvailable = true
-	//msg.MsgHdr.Rcode = dns.RcodeNameError
 	msg.Question = req.Question
-	msg.Answer = []dns.RR{}
+	msg.Answer = answer
 	msg.Ns = []dns.RR{}
 	msg.Extra = []dns.RR{}
 

@@ -6,19 +6,17 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"regexp"
 	"sync"
 	"syscall"
-	"time"
 )
 
 const (
-	RESPONSE_FORWARD  = 1
-	RESPONSE_SPOOF    = 2
-	RESPONSE_NXDOMAIN = 3
+	RESPONSE_FORWARD = 1
+	RESPONSE_SPOOF   = 2
+	RESPONSE_EMPTY   = 3
 )
 
 // Cache entry
@@ -38,6 +36,8 @@ var (
 	// (optional) value is a surrogate script to serve.
 	_hosts = make(map[string]string)
 
+	_surrogates []surrogate_t
+
 	// Compiled regexes added with regexlist/regex. Pre-compiling the surrogate
 	// scripts isn't possible here.
 	_regexps []*regexp.Regexp
@@ -50,24 +50,15 @@ var (
 	// Cache DNS responses, the key is the hostname to cache
 	_cache     = make(map[string]cache_t)
 	_cachelock sync.RWMutex
+
+	// Print more info to the screen
+	_verbose = false
 )
 
 func main() {
-	log.SetFlags(log.Lshortfile)
+	command := cmdline()
 
-	// No command, print help
-	if len(os.Args) < 2 {
-		usage("global", "")
-		return
-	}
-
-	args, err := getopt(os.Args[2:], "")
-	fatal(err)
-	for opt, arg := range args {
-		fmt.Printf("%s -> %s", opt, arg)
-	}
-
-	switch os.Args[1] {
+	switch command {
 	case "help":
 		if len(os.Args) > 2 {
 			usage(os.Args[2], "")
@@ -77,18 +68,31 @@ func main() {
 	case "version":
 		fmt.Println("0.1")
 	case "server":
-		_config.parse("config")
 		listen()
 	case "status":
-		fmt.Println("TODO")
+		if len(os.Args) < 3 {
+			usage("status", "status needs a command")
+		}
+		subcmd := os.Args[len(os.Args)-1]
+		writeCtl(command + " " + subcmd)
+	case "cache":
+		if len(os.Args) < 3 {
+			usage("cache", "cache needs a command")
+		}
+		subcmd := os.Args[len(os.Args)-1]
+		writeCtl(command + " " + subcmd)
+	case "override":
+		if len(os.Args) < 3 {
+			usage("override", "override needs a command")
+		}
+		subcmd := os.Args[len(os.Args)-1]
+		writeCtl(command + " " + subcmd)
 	case "host":
 		fmt.Println("TODO")
 	case "regex":
 		fmt.Println("TODO")
-	case "cache":
+	case "log":
 		fmt.Println("TODO")
-	default:
-		usage("global", "invalid command "+os.Args[1])
 	}
 }
 
@@ -96,49 +100,28 @@ func main() {
 func listen() {
 	chroot()
 
-	// Setup servers
-	listenHttp()
-	listenCtl()
+	// Setup servers; the bind* function only sets up the socket.
+	ctl := bindCtl()
+	http, https := bindHttp()
 	dns_udp, dns_tcp := listenDns()
 	defer dns_udp.Shutdown()
 	defer dns_tcp.Shutdown()
 
-	// Remove old cache items every 5 minutes.
-	go func() {
-		for {
-			time.Sleep(5 * time.Minute)
-
-			_cachelock.Lock()
-			i := 0
-			for name, cache := range _cache {
-				// Don't lock stuff too long
-				if i > 1000 {
-					break
-				}
-
-				if time.Now().Unix() > cache.expires {
-					delete(_cache, name)
-				}
-				i += 1
-			}
-			_cachelock.Unlock()
-		}
-	}()
-
-	// Wait for all servers to start
-	// TODO: This can be better − in fact, I'd prefer to open the sockets much
-	// earlier and do other init stuff later so we can drop privileges.
-	time.Sleep(1 * time.Second)
-	info("servers started")
-
 	// Drop privileges
 	drop_privs()
+
+	setupCtlHandle(ctl)
+	setupHttpHandle(http, https)
 
 	// Read the hosts information *after* starting the DNS server because we can
 	// add hosts from remote sources (and thus needs DNS)
 	_config.sources.read()
 	_config.locked = false
-	info("initialisation finished")
+
+	// Remove old cache items every 5 minutes.
+	startCachePurger()
+
+	info("initialisation finished; ready to serve")
 
 	// Wait for SIGINT or SIGTERM
 	sigs := make(chan os.Signal, 1)
@@ -160,6 +143,25 @@ func chroot() {
 	fp, err := os.Create("/etc/resolv.conf")
 	defer fp.Close()
 	fp.Write([]byte(fmt.Sprintf("nameserver %s", _config.dns_listen.host)))
+
+	// Make sure the rootCA files exist and are not world-readable.
+	keyfile := func(path string) string {
+		st, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			fatal(err)
+		}
+		// TODO: How about just setting it?
+		if st.Mode().Perm().String() != "-rw-------" {
+			fatal(fmt.Errorf("the permission of %v must be exactly -rw------- (or 0600); currently %s", path, st.Mode().Perm()))
+		}
+
+		err = os.Chown(path, _config.user.uid, _config.user.gid)
+		fatal(err)
+		return path
+	}
+
+	_config.root_key = keyfile(_config.root_key)
+	_config.root_cert = keyfile(_config.root_cert)
 }
 
 // The MIT License (MIT)

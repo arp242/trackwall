@@ -5,12 +5,14 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"log"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
+	"strings"
+	"time"
+
 	syscall "golang.org/x/sys/unix"
 )
 
@@ -23,10 +25,32 @@ func realpath(path string) (string, error) {
 
 // Drop privileges
 func drop_privs() {
+	// TODO Don't do this on Linux systems for now.
+	//
+	// Calls to this are peppered throughout since on Linux different threads can
+	// have a different uid/gid, and the syscall only sets it for the *current*
+	// thread.
+	// See: https://github.com/golang/go/issues/1435
+	//
+	// This is only an issue on Linux, not on other systems.
+	//
+	// This is really a quick stop-hap solution and we should do this better. One
+	// way is to start a new process after the privileged initialisation and pass
+	// the filenos to that, but that would require reworking quite a bit of the DNS
+	// server bits in the dns package...
+	if runtime.GOOS == "linux" {
+		return
+	}
+
 	err := syscall.Setresgid(_config.user.gid, _config.user.gid, _config.user.gid)
 	fatal(err)
 	err = syscall.Setresuid(_config.user.uid, _config.user.uid, _config.user.uid)
 	fatal(err)
+
+	// Double-check just to be sure.
+	if syscall.Getuid() != _config.user.uid || syscall.Getgid() != _config.user.gid {
+		fatal(fmt.Errorf("unable to drop privileges"))
+	}
 }
 
 // Convert a human-readable duration to the number of seconds. A "duration" is
@@ -72,27 +96,73 @@ func durationToSeconds(dur string) (int, error) {
 	return i * fact, err
 }
 
-func hashString(str string) string {
-	h := sha256.Sum256([]byte(str))
-	return hex.EncodeToString(h[:])
+// Remove old cache items every 5 minutes.
+func startCachePurger() {
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+
+			_cachelock.Lock()
+			i := 0
+			for name, cache := range _cache {
+				// Don't lock stuff too long
+				if i > 1000 {
+					break
+				}
+
+				if time.Now().Unix() > cache.expires {
+					delete(_cache, name)
+				}
+				i += 1
+			}
+			_cachelock.Unlock()
+		}
+	}()
+}
+
+func msg(prefix, msg interface{}) {
+	calldepth := 2
+	_, file, line, ok := runtime.Caller(calldepth)
+	if !ok {
+		file = "???"
+		line = 0
+	}
+	short := file
+	for i := len(file) - 1; i > 0; i-- {
+		if file[i] == '/' {
+			short = file[i+1:]
+			break
+		}
+	}
+	file = short
+
+	s := fmt.Sprintf("%s %v %v", prefix, file, line)
+	fmt.Printf("%s %s%v\n", s, strings.Repeat(" ", 21-len(s)), msg)
 }
 
 // Exit if err is non-nil
 func fatal(err error) {
-	if err != nil {
-		log.Fatal(err)
+	if err == nil {
+		return
 	}
+
+	msg("error", err)
+	os.Exit(1)
 }
 
 // Warn if err is non-nil
 func warn(err error) {
-	if err != nil {
-		log.Print(err)
+	if err == nil {
+		return
 	}
+
+	msg("warn", err)
 }
 
-func info(msg string) {
-	fmt.Println(msg)
+func info(m string) {
+	if _verbose {
+		msg("info", m)
+	}
 }
 
 // The MIT License (MIT)

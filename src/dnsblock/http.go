@@ -20,8 +20,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
 const _blocked = `<html><head><title> dnsblock %[1]s</title></head><body>
@@ -39,20 +37,48 @@ const _list = `<html><head><title>dnsblock</title></head><body><ul>
 <li><a href="/$@_list/cache">cache</a></li>
 </ul></body></html>`
 
-func listenHttp() {
+func bindHttp() (l_http, l_https net.Listener) {
+	l_http, err := net.Listen("tcp", _config.http_listen.String())
+	fatal(err)
+
+	l_https, err = net.Listen("tcp", _config.https_listen.String())
+	fatal(err)
+
+	return l_http, l_https
+}
+
+// This is tcpKeepAliveListener
+type httpListener struct {
+	*net.TCPListener
+}
+
+func (ln httpListener) Accept() (c net.Conn, err error) {
+	tc, err := ln.AcceptTCP()
+	if err != nil {
+		return
+	}
+	// TODO: Test is 2 seconds works well enough...
+	tc.SetKeepAlive(true)
+	//tc.SetKeepAlivePeriod(3 * time.Minute)
+	tc.SetKeepAlivePeriod(2 * time.Second)
+	return tc, nil
+}
+
+func setupHttpHandle(l_http, l_https net.Listener) {
 	go func() {
-		err := http.ListenAndServe(_config.http_listen.String(), &handleHttp{})
+		srv := &http.Server{Addr: _config.http_listen.String()}
+		srv.Handler = &handleHttp{}
+		err := srv.Serve(httpListener{l_http.(*net.TCPListener)})
 		fatal(err)
 	}()
 
 	go func() {
-		server := &http.Server{
-			Addr:      _config.https_listen.String(),
-			Handler:   &handleHttp{},
-			TLSConfig: &tls.Config{GetCertificate: getCert},
-		}
+		srv := &http.Server{Addr: _config.https_listen.String()}
+		srv.Handler = &handleHttp{}
+		srv.TLSConfig = &tls.Config{GetCertificate: getCert}
 
-		err := server.ListenAndServeTLS("", "")
+		tlsListener := tls.NewListener(httpListener{l_https.(*net.TCPListener)}, srv.TLSConfig)
+		err := srv.Serve(tlsListener)
 		fatal(err)
 	}()
 }
@@ -60,94 +86,122 @@ func listenHttp() {
 type handleHttp struct{}
 
 func (f *handleHttp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	for {
-		if !_config.locked {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	// See comment in handleDns
-	drop_privs()
+	// Never cache anything here
+	w.Header().Set("Cache-Control", "private, max-age=0, no-cache, must-revalidate")
 
 	host := html.EscapeString(r.Host)
 	url := html.EscapeString(strings.TrimLeft(r.URL.Path, "/"))
 
 	// Special $@_ control URL
 	if strings.HasPrefix(url, "$@_") {
-		// $@_allow/duration/redirect
-		if strings.HasPrefix(url, "$@_allow") {
-			params := strings.Split(url, "/")
-			fmt.Println(params)
-			secs, err := durationToSeconds(params[1])
-			if err != nil {
-				warn(err)
-				return
-			}
+		f.handleHttpSpecial(w, r, host, url)
+		return
+	}
 
-			_override_hosts[host] = time.Now().Add(time.Duration(secs) * time.Second).Unix()
-			// TODO: Also add query parameters and such!
-			w.Header().Set("Location", "/"+strings.Join(params[2:], "/"))
-			w.WriteHeader(http.StatusSeeOther) // TODO: Is this the best 30x header?
-			// $@_list/{config,hosts,override}
-		} else if strings.HasPrefix(url, "$@_list") {
-			params := strings.Split(url, "/")
-			if len(params) < 2 || params[1] == "" {
-				fmt.Fprintf(w, _list)
-				return
-			}
+	// TODO: Do something sane with the Content-Type header
+	sur, success := findSurrogate(host)
+	if success {
+		w.Header().Set("Content-Type", "application/javascript")
+		fmt.Fprintf(w, sur)
+		return
+	}
 
-			param := params[1]
-			switch param {
-			case "config":
-				spew.Fdump(w, _config)
-			case "hosts":
-				fmt.Fprintf(w, fmt.Sprintf("# Blocking %v hosts\n", len(_hosts)))
-				for k, v := range _hosts {
-					if v != "" {
-						fmt.Fprintf(w, fmt.Sprintf("%v  # %v\n", k, v))
-					} else {
-						fmt.Fprintf(w, fmt.Sprintf("%v\n", k))
-					}
-				}
-			case "regexps":
-				for _, v := range _regexps {
-					fmt.Fprintf(w, fmt.Sprintf("%v\n", v))
-				}
-			case "override":
-				spew.Fdump(w, _override_hosts)
-			case "cache":
-				spew.Fdump(w, _cache)
-			}
-		} else {
-			fmt.Fprintf(w, "unknown command: %v", url)
-		}
+	// Default blocked text
+	if strings.HasSuffix(url, ".js") {
+		// Add a comment so it won't give parse errors
+		// TODO: Make this a text message, rather than HTML
+		w.Header().Set("Content-Type", "application/javascript")
+		fmt.Fprintf(w, fmt.Sprintf("/*"+_blocked+"*/", host, url))
 	} else {
-		// Check for surrogate script
-		sur, exists := _hosts[host]
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, fmt.Sprintf(_blocked, host, url))
+	}
+}
 
-		// This should never happen
-		// TODO: this does happen if we block by regexp; we need to do special
-		// foo here
-		if !exists {
-			//warn(fmt.Errorf("host %v not in _hosts?!", host))
+// Handle "special" $@_ urls
+func (f *handleHttp) handleHttpSpecial(w http.ResponseWriter, r *http.Request, host, url string) {
+	// $@_allow/duration/redirect
+	if strings.HasPrefix(url, "$@_allow") {
+		params := strings.Split(url, "/")
+		//fmt.Println(params)
+		secs, err := durationToSeconds(params[1])
+		if err != nil {
+			warn(err)
+			return
 		}
 
-		// TODO: Do something sane with the Content-Type header
-		if sur != "" {
-			fmt.Fprintf(w, sur)
-		} else {
-			if strings.HasSuffix(url, ".js") {
-				fmt.Fprintf(w, fmt.Sprintf("/*" + _blocked + "*/", host, url))
-			} else {
-				fmt.Fprintf(w, fmt.Sprintf(_blocked, host, url))
+		// TODO: Always add the shortest entry from the hosts here
+		_override_hosts[host] = time.Now().Add(time.Duration(secs) * time.Second).Unix()
+
+		_cachelock.Lock()
+		delete(_cache, "A "+host)
+		delete(_cache, "AAAA "+host)
+		_cachelock.Unlock()
+
+		// Redirect back to where the user came from
+		// TODO: Also add query parameters and such!
+		w.Header().Set("Location", "/"+strings.Join(params[2:], "/"))
+		w.WriteHeader(http.StatusSeeOther) // TODO: Is this the best 30x header?
+		// $@_list/{config,hosts,override}
+		/* else if strings.HasPrefix(url, "$@_list") {
+		params := strings.Split(url, "/")
+		if len(params) < 2 || params[1] == "" {
+			fmt.Fprintf(w, _list)
+			return
+		}
+
+		param := params[1]
+		switch param {
+		case "config":
+			spew.Fdump(w, _config)
+		case "hosts":
+			fmt.Fprintf(w, fmt.Sprintf("# Blocking %v hosts\n", len(_hosts)))
+			for k, v := range _hosts {
+				if v != "" {
+					fmt.Fprintf(w, fmt.Sprintf("%v  # %v\n", k, v))
+				} else {
+					fmt.Fprintf(w, fmt.Sprintf("%v\n", k))
+				}
 			}
+		case "regexps":
+			for _, v := range _regexps {
+				fmt.Fprintf(w, fmt.Sprintf("%v\n", v))
+			}
+		case "override":
+			spew.Fdump(w, _override_hosts)
+		case "cache":
+			_cachelock.Lock()
+			spew.Fdump(w, _cache)
+			_cachelock.Unlock()
+		}
+		*/
+	} else {
+		fmt.Fprintf(w, "unknown command: %v", url)
+	}
+}
+
+// Try to find a surrogate.
+func findSurrogate(host string) (script string, success bool) {
+	// Exact match! Hurray! This is fastest.
+	sur, exists := _hosts[host]
+	if exists && sur != "" {
+		return sur, true
+	}
+
+	// Slower check if a regex matches the domain
+	for _, sur := range _surrogates {
+		//fmt.Println(host, sur)
+		if sur.MatchString(host) {
+			return sur.script, true
 		}
 	}
+
+	return "", false
 }
 
 // Generate a certificate for the domain
 // TODO: This can be a lot more efficient.
+// TODO: certs written out are world-readable
 func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	name := clientHello.ServerName
 	if name == "" {

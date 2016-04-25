@@ -14,5 +14,5 @@ export GOPATH="$root"
 go build -ldflags '-s -w' -x -v dnsblock
 #go build -x -v dnsblock
 
-set -x
+set +x
 echo "\nBuilt $root/dnsblock"

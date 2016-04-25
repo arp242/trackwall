@@ -4,14 +4,162 @@
 // The control socket
 package main
 
+import (
+	"bufio"
+	"fmt"
+	"io/ioutil"
+	"net"
+	"strings"
 
-// http://127.0.0.54
-//
-// GET /list
-// GET /list/config
-// GET /list/hosts
+	"github.com/davecgh/go-spew/spew"
+)
 
-func listenCtl() {
+func bindCtl() net.Listener {
+	l, err := net.Listen("tcp", _config.control_listen.String())
+	fatal(err)
+	return l
+}
+
+func setupCtlHandle(l net.Listener) {
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				warn(err)
+				continue
+			}
+			go handleCtl(conn)
+		}
+	}()
+}
+
+func handleCtl(conn net.Conn) {
+	defer conn.Close()
+
+	data, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		warn(err)
+		return
+	}
+
+	sdata := string(data)
+
+	// This accepts simple "telnet" style commands:
+	// status summary
+	// host add example.com example2.com
+	//
+	// But we also accept HTTP-style:
+	// GET /status/summary HTTP/1.1\r\n
+	// GET /host/add/example.com/example2.com HTTP/1.1\r\n"
+	var ldata []string
+	if strings.HasPrefix(sdata, "GET /") {
+		// Remove GET and HTTP/1.1\r\n
+		sdata = sdata[5 : len(sdata)-11]
+		ldata = strings.Split(strings.TrimSpace(sdata), "/")
+	} else {
+		ldata = strings.Split(strings.TrimSpace(sdata), " ")
+	}
+
+	var w string
+	switch ldata[0] {
+	case "status":
+		if len(ldata) < 2 {
+			w = "error: need a subcommand"
+		} else {
+			w = handleStatus(ldata[1], conn)
+		}
+	case "cache":
+		if len(ldata) < 2 {
+			w = "error: need a subcommand"
+		} else {
+			w = handleCache(ldata[1], conn)
+		}
+	case "override":
+		if len(ldata) < 2 {
+			w = "error: need a subcommand"
+		} else {
+			w = handleOverride(ldata[1], conn)
+		}
+	case "host":
+	case "regex":
+	case "log":
+	default:
+		w = fmt.Sprintf("error: unknown command: %#v", data)
+	}
+
+	fmt.Fprintf(conn, w+"\n")
+	warn(err)
+}
+
+func handleCache(cmd string, w net.Conn) (out string) {
+	switch cmd {
+	case "flush":
+		_cachelock.Lock()
+		_cache = make(map[string]cache_t)
+		_cachelock.Unlock()
+	default:
+		out = "error: unknown subcommand"
+	}
+
+	return out
+}
+
+func handleOverride(cmd string, w net.Conn) (out string) {
+	switch cmd {
+	case "flush":
+		// TODO: lock!
+		_override_hosts = make(map[string]int64)
+	default:
+		out = "error: unknown subcommand"
+	}
+
+	return out
+}
+
+func handleStatus(cmd string, w net.Conn) (out string) {
+	scs := spew.ConfigState{Indent: "\t"}
+
+	switch cmd {
+	case "summary":
+		fmt.Fprintf(w, "%v hosts\n", len(_hosts))
+		fmt.Fprintf(w, "%v regexps\n", len(_regexps))
+		fmt.Fprintf(w, "%v cache items\n", len(_cache))
+	case "config":
+		scs.Fdump(w, _config)
+	case "cache":
+		_cachelock.Lock()
+		scs.Fdump(w, _cache)
+		_cachelock.Unlock()
+	case "hosts":
+		fmt.Fprintf(w, fmt.Sprintf("# Blocking %v hosts\n", len(_hosts)))
+		for k, v := range _hosts {
+			if v != "" {
+				fmt.Fprintf(w, fmt.Sprintf("%v  # %v\n", k, v))
+			} else {
+				fmt.Fprintf(w, fmt.Sprintf("%v\n", k))
+			}
+		}
+	case "regexps":
+		for _, v := range _regexps {
+			fmt.Fprintf(w, fmt.Sprintf("%v\n", v))
+		}
+	case "override":
+		scs.Fdump(w, _override_hosts)
+	default:
+		out = "error: unknown subcommand"
+	}
+
+	return out
+}
+
+func writeCtl(what string) {
+	conn, err := net.Dial("tcp", _config.control_listen.String())
+	fatal(err)
+	defer conn.Close()
+
+	fmt.Fprintf(conn, what+"\n")
+	data, err := ioutil.ReadAll(conn)
+	fmt.Println(strings.TrimSpace(string(data)))
 }
 
 // The MIT License (MIT)
