@@ -111,7 +111,7 @@ OS specific setup
 
 - Setup resolv.conf:
 
-  Set `/etc/dhclient.conf` to something like:
+	Set `/etc/dhclient.conf` to something like:
 
 		# The installer adds this line, not strictly needed
 		send host-name "yourhostname";
@@ -119,17 +119,17 @@ OS specific setup
 		# List our nameserver first
 		prepend domain-name-servers 127.0.0.53;
 
-  Running `sh /etc/netstart` will apply the settings.
+	Running `sh /etc/netstart` will apply the settings.
 
 - Set alias for `lo0`:
 
-  If you want to listen on the loopback interface that is not `127.0.0.1` (which
-  is the case by default) you'll have to add that address as an alias, which can
-  be done in `/etc/hostname.lo0`:
+	If you want to listen on the loopback interface that is not `127.0.0.1` (which
+	is the case by default) you'll have to add that address as an alias, which can
+	be done in `/etc/hostname.lo0`:
 
 		inet alias 127.0.0.53
 
-  Running `sh /etc/netstart` will apply the settings.
+	Running `sh /etc/netstart` will apply the settings.
 
 Browser setup
 --------------
