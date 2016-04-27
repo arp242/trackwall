@@ -50,7 +50,9 @@ that though. It's interactive and asks for confirmation on every step. Here are
 the general instructions:
 
 - Add the `_dnsblock` user.
+
 - Make the chroot directory.
+
 - Make a X509 certificate in the chroot directory. This is required to serve
   surrogate scripts over https. dnsblock will generate a new certificate with
   the correct domain name signed with this root CA. You'll have to install it in
@@ -111,11 +113,11 @@ OS specific setup
 
   Set `/etc/dhclient.conf` to something like:
 
-	# The installer adds this line, not strictly needed
-	send host-name "yourhostname";
+		# The installer adds this line, not strictly needed
+		send host-name "yourhostname";
 
-	# List our nameserver first
-	prepend domain-name-servers 127.0.0.53;
+		# List our nameserver first
+		prepend domain-name-servers 127.0.0.53;
 
   Running `sh /etc/netstart` will apply the settings.
 
@@ -125,7 +127,7 @@ OS specific setup
   is the case by default) you'll have to add that address as an alias, which can
   be done in `/etc/hostname.lo0`:
 
-	inet alias 127.0.0.53
+		inet alias 127.0.0.53
 
   Running `sh /etc/netstart` will apply the settings.
 
