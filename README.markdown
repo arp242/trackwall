@@ -2,7 +2,7 @@ Project status: experimental; it works for the author, and may be useful to
 others, but may also sacrifice your firstborn to Cthulhu and take out a new
 mortgage on your house.
 
-----------------------------------------
+-----------------------------------------
 
 DNS proxy and filter.
 
