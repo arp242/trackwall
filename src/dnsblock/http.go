@@ -213,7 +213,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// openssl genrsa -out s7.addthis.com.key 2048
 	keyfile := fmt.Sprintf("/cache/certs/%s.key", name)
 	if _, err := os.Stat(keyfile); os.IsNotExist(err) {
-		info("    Making a key for " + name)
+		dbg("    Making a key for " + name)
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
 			return nil, err
@@ -232,7 +232,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// openssl req -new -key s7.addthis.com.key -out s7.addthis.com.csr
 	csrfile := fmt.Sprintf("/cache/certs/%s.csr", name)
 	if _, err := os.Stat(csrfile); os.IsNotExist(err) {
-		info("    Making a csr for " + name)
+		dbg("    Making a csr for " + name)
 		template := x509.CertificateRequest{}
 
 		if ip := net.ParseIP(name); ip != nil {
@@ -261,7 +261,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// openssl x509 -req -in s7.addthis.com.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out s7.addthis.com.crt -days 500 -sha256
 	certfile := fmt.Sprintf("/cache/certs/%s.crt", name)
 	if _, err := os.Stat(certfile); os.IsNotExist(err) {
-		info("    Making a cert for " + name)
+		dbg("    Making a cert for " + name)
 
 		// Load root CA
 		fp, err := os.Open(_config.root_cert)
@@ -291,6 +291,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		template := x509.Certificate{
 			SerialNumber: serialNumber,
 			Subject: pkix.Name{
+				CommonName: "dnsblock root",
 				Organization: []string{"dnsblock"},
 			},
 			NotBefore: time.Now().Add(-24 * time.Hour),
@@ -318,12 +319,10 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 
 		pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
 		fp.Close()
-
-		_ = cert
 	}
 
 	// We can now use the files to make a TLS certificate
-	info(fmt.Sprintf("tls %s, %s", certfile, keyfile))
+	dbg(fmt.Sprintf("tls %s, %s", certfile, keyfile))
 	//tlscert, err := tls.LoadX509KeyPair(certfile, keyfile)
 	tlscert, err := tls.LoadX509KeyPair(certfile, _config.root_key)
 	if err != nil {
@@ -332,6 +331,58 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	}
 
 	return &tlscert, nil
+}
+
+// openssl genrsa -out /var/lib/dnsblock/rootCA.key 2048
+func makeRootKey() {
+	warn(fmt.Errorf("generating a new root key at %s", _config.root_key))
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	fatal(err)
+
+	fp, err := os.Create(_config.root_key)
+	fatal(err)
+
+	pem.Encode(fp, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	fp.Close()
+}
+
+// openssl req -x509 -new -nodes -key /var/lib/dnsblock/rootCA.key -sha256 -days 1024 -out /var/lib/dnsblock/rootCA.pem
+// TODO: certs generated with this don't work :-/
+func makeRootCert() {
+	warn(fmt.Errorf("generating a new root certificate at %s", _config.root_cert))
+
+	fp, err := os.Open(_config.root_key)
+	data, err := ioutil.ReadAll(fp)
+	rootpem, _ := pem.Decode(data)
+	fp.Close()
+	rootkey, err := x509.ParsePKCS1PrivateKey(rootpem.Bytes)
+	fatal(err)
+
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: "dnsblock root",
+			Organization: []string{"dnsblock root"},
+		},
+		NotBefore: time.Now().Add(-24 * time.Hour),
+		NotAfter:  time.Now().Add(24 * time.Hour * 365 * 10),
+		//DNSNames:  []string{"code.arp242.net"},
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA: true,
+	}
+
+	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, &rootkey.PublicKey, rootkey)
+	fatal(err)
+	fp, err = os.Create(_config.root_cert)
+	fatal(err)
+
+	pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	fp.Close()
 }
 
 // The MIT License (MIT)

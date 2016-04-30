@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"runtime"
 	"strings"
 
 	"github.com/davecgh/go-spew/spew"
@@ -121,9 +122,14 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 
 	switch cmd {
 	case "summary":
-		fmt.Fprintf(w, "%v hosts\n", len(_hosts))
-		fmt.Fprintf(w, "%v regexps\n", len(_regexps))
-		fmt.Fprintf(w, "%v cache items\n", len(_cache))
+		var stats runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&stats)
+
+		fmt.Fprintf(w, "hosts:             %v\n", len(_hosts))
+		fmt.Fprintf(w, "regexps:           %v\n", len(_regexps))
+		fmt.Fprintf(w, "cache items:       %v\n", len(_cache))
+		fmt.Fprintf(w, "memory allocated:  %vKb\n", stats.Sys/1024)
 	case "config":
 		scs.Fdump(w, _config)
 	case "cache":

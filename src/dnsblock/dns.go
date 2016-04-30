@@ -64,12 +64,14 @@ func handleDns(w dns.ResponseWriter, req *dns.Msg) {
 	switch response {
 	case RESPONSE_FORWARD:
 		if !from_cache {
-			info(fmt.Sprintf("forward  %v", name))
+			//info(fmt.Sprintf("%sorward  %v", greenbg("f"), name))
+			infoc(fmt.Sprintf("forward  %v", name), "green")
 		}
 		forward(_config.dns_forward.String(), w, req)
 	case RESPONSE_SPOOF:
 		if !from_cache {
-			info(fmt.Sprintf("spoof    %v", name))
+			//info(fmt.Sprintf("%spoof    %v", orangebg("s"), name))
+			infoc(fmt.Sprintf("spoof    %v", name), "orange")
 		}
 		spoof(name, w, req)
 	case RESPONSE_EMPTY:
@@ -238,7 +240,8 @@ func forward(addr string, w dns.ResponseWriter, req *dns.Msg) {
 	resp, _, err := c.Exchange(req, addr)
 	if err != nil {
 		dns.HandleFailed(w, req)
-		warn(fmt.Errorf("unable to forward DNS request to %v: %v", addr, err))
+		warn(fmt.Errorf("unable to forward DNS request for %v to %v: %v",
+			req.Question[0], addr, err))
 		return
 	}
 

@@ -33,6 +33,7 @@ type config_t struct {
 	chroot         string
 	cache_hosts    int
 	cache_dns      int
+	color bool
 
 	sources sources_t
 
@@ -51,7 +52,6 @@ func (c *config_t) parse(file string, toplevel bool) {
 	fatal(err)
 	defer fp.Close()
 
-	//c.sources = sources_t{}
 	scanner := bufio.NewScanner(fp)
 	lines := []string{}
 	i := 0
@@ -62,6 +62,11 @@ func (c *config_t) parse(file string, toplevel bool) {
 
 		if line == "" || line[0] == '#' {
 			continue
+		}
+
+		cmt := strings.Index(line, "#")
+		if cmt > -1 {
+			line = line[cmt:]
 		}
 
 		if is_indented {
@@ -124,6 +129,12 @@ func (c *config_t) parse(file string, toplevel bool) {
 		case "cache-dns":
 			c.cache_dns, err = durationToSeconds(one(splitline))
 			fatal(err)
+		case "color":
+			c.color = false
+			color := one(splitline)
+			if strings.ToLower(color) == "yes" {
+				c.color = true
+			}
 		// File sources
 		case "hostlist":
 			for _, v := range three(splitline) {
@@ -198,7 +209,7 @@ func findResolver() (string, error) {
 		return line[strings.LastIndex(line, " ")+1:] + ":53", nil
 	}
 
-	return "", fmt.Errorf("unable to find host in /etc/resolv.cinf")
+	return "", fmt.Errorf("unable to find host in /etc/resolv.conf")
 }
 
 // An IP or hostname
@@ -214,6 +225,11 @@ func (a addr_t) String() string {
 
 // Set it from a host:port string.
 func (a *addr_t) set(addr string) {
+	// TODO: Not ipv6 safe
+	if strings.Index(addr, ":") < 0 {
+		addr += ":53"
+	}
+
 	host, port, err := net.SplitHostPort(addr)
 	fatal(err)
 	a.host = host
@@ -277,6 +293,26 @@ func (sources *sources_t) hasDomain(name string) bool {
 // Read the hosts information *after* starting the DNS server because we can add
 // hosts from remote sources (and thus needs DNS)
 func (sources *sources_t) read() {
+	stat, err := os.Stat("/cache/compiled")
+
+	if err == nil {
+		expires := stat.ModTime().Add(time.Duration(_config.cache_hosts) * time.Second)
+		if time.Now().Unix() > expires.Unix() {
+			warn(fmt.Errorf("the compiled list has expired, not using it"))
+		} else {
+			info("using the compiled list")
+			fp, err := os.Open("/cache/compiled")
+			fatal(err)
+			defer fp.Close()
+
+			scanner := bufio.NewScanner(fp)
+			for scanner.Scan() {
+				sources.addHost(scanner.Text())
+			}
+			return
+		}
+	}
+
 	for _, v := range sources.hostlists {
 		sources.loadList(v[0], v[1], sources.addHost)
 	}
@@ -326,11 +362,16 @@ func (s *sources_t) addHost(name string) {
 		return
 	}
 
-	// TODO: All of this is really slow, and saves maybe 200k memory at the max
-	// (usually less). Either make it faster, or make a separate compile
-	// command.
-	/*
-		// Don't add redundant entries
+	_hosts[name] = ""
+}
+
+// Compile all the sources in one file, saves some memory and makes lookups a
+// bit faster
+func (s *sources_t) compile() {
+	new_hosts := make(map[string]string)
+
+outer:
+	for name, _ := range _hosts {
 		labels := strings.Split(name, ".")
 
 		// This catches adding "s8.addthis.com" while "addthis.com" is in the list
@@ -343,23 +384,31 @@ func (s *sources_t) addHost(name string) {
 				c = labels[l-i-1] + "." + c
 			}
 
-			_, have := _hosts[c]
+			_, have := new_hosts[c]
 			if have {
-				return
+				continue outer
 			}
 		}
 
 		// This catches adding "addthis.com" while "s7.addthis.com" is in the list;
 		// in which case we want to remove the former.
-		// TODO: Can we make this faster?
-		for host, _ := range _hosts {
+		for host, _ := range new_hosts {
 			if strings.HasSuffix(host, name) {
-				//fmt.Printf("Removing %s (matches %s)\n", host, name)
-				s.removeHost(host)
+				delete(new_hosts, name)
 			}
 		}
-	*/
-	_hosts[name] = ""
+
+		new_hosts[name] = ""
+	}
+
+	fp, err := os.Create("/cache/compiled")
+	fatal(err)
+	defer fp.Close()
+	for k, _ := range new_hosts {
+		fp.WriteString(fmt.Sprintf("%v\n", k))
+	}
+
+	fmt.Printf("Compiled %v hosts to %v entries\n", len(_hosts), len(new_hosts))
 }
 
 // Remove host from _hosts
@@ -387,6 +436,8 @@ func (s *sources_t) removeRegexp(v string) {
 // Load a list and execute cb() on every item we find.
 // TODO: Add option to restrict format (e.g. regexplist hosts ... shouldn't be
 // allowed).
+// TODO: Allow loading remote config files in the dnsblock format (which only
+// parses host, hostlist, etc. and *not* dns-listen and such).
 func (s *sources_t) loadList(format string, url string, cb func(line string)) {
 	fp, err := s.loadCachedURL(url)
 	fatal(err)

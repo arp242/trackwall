@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -120,7 +121,9 @@ func startCachePurger() {
 	}()
 }
 
-func msg(prefix, msg interface{}) {
+// Send a message. You should never call this yourself, use fatal(), warn(),
+// info(), infoc(), or dbg().
+func msg(prefix, msg interface{}, fillcolor string, fp io.Writer) {
 	calldepth := 2
 	_, file, line, ok := runtime.Caller(calldepth)
 	if !ok {
@@ -136,8 +139,18 @@ func msg(prefix, msg interface{}) {
 	}
 	file = short
 
-	s := fmt.Sprintf("%s %v %v", prefix, file, line)
-	fmt.Printf("%s %s%v\n", s, strings.Repeat(" ", 21-len(s)), msg)
+	s := fmt.Sprintf("%s %v:%v", prefix, file, line)
+
+	fill := strings.Repeat(" ", 20-len(s))
+	switch fillcolor {
+	case "orange":
+		fill = orangebg(fill)
+	case "green":
+		fill = greenbg(fill)
+	case "red":
+		fill = redbg(fill)
+	}
+	fmt.Fprintf(fp, "%s %s %v\n", s, fill, msg)
 }
 
 // Exit if err is non-nil
@@ -146,7 +159,7 @@ func fatal(err error) {
 		return
 	}
 
-	msg("error", err)
+	msg("error", err, "red", os.Stderr)
 	os.Exit(1)
 }
 
@@ -156,13 +169,37 @@ func warn(err error) {
 		return
 	}
 
-	msg("warn", err)
+	msg("warn", err, "red", os.Stderr)
 }
 
 func info(m string) {
 	if _verbose {
-		msg("info", m)
+		msg("info", m, "", os.Stdout)
 	}
+}
+
+func infoc(m, color string) {
+	if _verbose {
+		msg("info", m, color, os.Stdout)
+	}
+}
+
+func dbg(m string) {
+	if false {
+		msg("debug", m, "", os.Stdout)
+	}
+}
+
+func greenbg(m string) string {
+	return fmt.Sprintf("[48;5;154m%s[0m", m)
+}
+
+func orangebg(m string) string {
+	return fmt.Sprintf("[48;5;221m%s[0m", m)
+}
+
+func redbg(m string) string {
+	return fmt.Sprintf("[48;5;9m%s[0m", m)
 }
 
 // The MIT License (MIT)

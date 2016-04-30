@@ -15,11 +15,11 @@
 # Note that option keys *must not* have leading whitespace, this:
 #
 # user _dnsblock
-#  chroot /var/run/dnsblock
+#  chroot /var/lib/dnsblock
 #
 # is seen as:
 #
-# user _dnsblock chroot /var/run/dnsblock
+# user _dnsblock chroot /var/lib/dnsblock
 #
 # Which is an error, since the user option takes only one argument.
 #
@@ -52,12 +52,16 @@ root-key /rootCA.key
 user _dnsblock
 
 # Chroot directory
-chroot /var/run/dnsblock
+chroot /var/lib/dnsblock
 
 # Cache DNS responses. Note that dnsblock does *not* cache the actual DNS
 # responses (that's the resolver's job), it merly caches whatever action is
 # taken (forward or spoof).
 cache-dns 1h
+
+# Show some colours in the output; to guarantee readability text is never
+# coloured, only some whitespace is shown with a different background colour.
+color yes
 
 ####################
 ### Adding hosts ###
@@ -186,6 +190,7 @@ surrogate .*googletag(manager|services)\.com$
 ### Add your own config ###
 ###########################
 
-source config.local
+source /etc/dnsblock/config.added
+source /etc/dnsblock/config.local
 
 # vim:ft=config

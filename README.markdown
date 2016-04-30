@@ -20,7 +20,7 @@ Advantages:
 
 To be fair, there are some disadvantages as well:
 
-- More difficult to set up.
+- It's currently a bit more difficult to set up.
 - Unable to filter by URL (only domain name). This is usually not a problem
   unless you want to filter out every last advertisement (which is not this
   program's goal).
@@ -33,6 +33,7 @@ Download and building
 dnsblock is written in Go, so you'll need that. Tested systems are:
 
 - Go 1.5 on OpenBSD 5.9
+- Go 1.6 on VoidLinux (musl libc)
 - Go 1.6 on Ubuntu 16.04
 
 Other POSIX systems should also work.
@@ -56,8 +57,7 @@ the general instructions:
 - Make a X509 certificate in the chroot directory. This is required to serve
   surrogate scripts over https. dnsblock will generate a new certificate with
   the correct domain name signed with this root CA. You'll have to install it in
-  your OS/browser to make this work.
-
+  your OS/browser to make this work.  
   **Keep these files private!**
 
 - You may also want to configure your browser (see "Browser setup" section).
@@ -71,17 +71,17 @@ OS specific setup
 ### Ubuntu
 - Setup user and chroot directory:
 
-		$ useradd _dnsblock -d /var/run/dnsblock -s /bin/false
-		$ mkdir /var/run/dnsblock
-		$ chown _dnsblock:_dnsblock /var/run/dnsblock/
+		$ useradd _dnsblock -d /var/lib/dnsblock -s /bin/false
+		$ mkdir /var/lib/dnsblock
+		$ chown _dnsblock:_dnsblock /var/lib/dnsblock/
 
 - Generate a root certificate:
 
-		$ openssl genrsa -out /var/run/dnsblock/rootCA.key 2048
-		$ openssl req -x509 -new -nodes -key /var/run/dnsblock/rootCA.key -sha256 -days 1024 -out /var/run/dnsblock/rootCA.pem
+		$ openssl genrsa -out /var/lib/dnsblock/rootCA.key 2048
+		$ openssl req -x509 -new -nodes -key /var/lib/dnsblock/rootCA.key -sha256 -days 1024 -out /var/lib/dnsblock/rootCA.pem
 
-		$ chown _dnsblock:_dnsblock /var/run/dnsblock/rootCA*
-		$ chmod 600 /var/run/dnsblock/rootCA*
+		$ chown _dnsblock:_dnsblock /var/lib/dnsblock/rootCA*
+		$ chmod 600 /var/lib/dnsblock/rootCA*
 
 - Setup resolv.conf:
 
@@ -94,20 +94,24 @@ OS specific setup
 	overcomplicated piece of shit with retarded documentation and at least three
 	different "standard" ways of configuring the fucking network...
 
+### VoidLinux
+
+Uses `dhcpcd`, add to `/etc/resolv.conf.head`:
+
+    nameserver 127.0.0.53
+
+/usr/libexec/dhcpcd-hooks/90-resolv.conf
+
+	#!/bin/sh
+	echo 'nameserver 127.0.0.53' > /etc/resolv.conf
+
+
 ### OpenBSD
 - Setup user and chroot directory:
 
-		$ useradd -d /var/run/dnsblock -s /sbin/nologin _dnsblock
-		$ mkdir /var/run/dnsblock
-		$ chown _dnsblock:_dnsblock /var/run/dnsblock/
-
-- Generate a root certificate:
-
-		$ openssl genrsa -out /var/run/dnsblock/rootCA.key 2048
-		$ openssl req -x509 -new -nodes -key /var/run/dnsblock/rootCA.key -sha256 -days 1024 -out /var/run/dnsblock/rootCA.pem
-
-		$ chown _dnsblock:_dnsblock /var/run/dnsblock/rootCA*
-		$ chmod 600 /var/run/dnsblock/rootCA*
+		$ useradd -d /var/lib/dnsblock -s /sbin/nologin _dnsblock
+		$ mkdir /var/lib/dnsblock
+		$ chown _dnsblock:_dnsblock /var/lib/dnsblock/
 
 - Setup resolv.conf:
 
@@ -137,6 +141,16 @@ TODO
 
 - DNS cache?
 
+- Install root certificate
+
+**NOTE!** Make sure the certificate is readable! Firefix will **NOT** show an
+error or warning if it's not.
+
+		$ openssl genrsa -out /var/lib/dnsblock/rootCA.key 2048
+		$ openssl req -x509 -new -nodes -key /var/lib/dnsblock/rootCA.key -sha256 -days 1024 -out /var/lib/dnsblock/rootCA.pem
+
+		$ chown _dnsblock:_dnsblock /var/lib/dnsblock/rootCA*
+		$ chmod 600 /var/lib/dnsblock/rootCA*
 
 How it works
 ============
@@ -172,10 +186,9 @@ FAQ
 Will this serve as a local DNS resolver and/or cache?
 -----------------------------------------------------
 No. This is not a DNS resolver/cache, just a proxy/filter. If you're looking for
-a DNS cache, then [unbound][unbound] is a good option. Both dnsblock and unbound
-take up about 10M of memory at the most (in the case of dnsblock this depends on
-the number of hosts to block) so running both on even an older system should be
-fine.
+a DNS cache then [unbound][unbound] is a good option. Running both on even an
+older system should be fine (the dnsblock author is running them both on a
+ten-year old laptop).
 
 This program sucks. What alternatives are there?
 ================================================

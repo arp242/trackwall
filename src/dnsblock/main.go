@@ -69,6 +69,8 @@ func main() {
 		fmt.Println("0.1")
 	case "server":
 		listen()
+	case "compile":
+		compile()
 	case "status":
 		if len(os.Args) < 3 {
 			usage("status", "status needs a command")
@@ -94,6 +96,15 @@ func main() {
 	case "log":
 		fmt.Println("TODO")
 	}
+}
+
+func compile() {
+	chroot()
+	drop_privs()
+
+	os.Remove("/cache/compiled")
+	_config.sources.read()
+	_config.sources.compile()
 }
 
 // Start servers
@@ -132,8 +143,14 @@ func listen() {
 // Setup chroot() from the information in _config
 func chroot() {
 	info(fmt.Sprintf("chrooting to %v", _config.chroot))
-	fatal(os.MkdirAll(_config.chroot, 0755))
-	fatal(os.Chown(_config.chroot, _config.user.uid, _config.user.gid))
+	if false {
+		//warn(fmt.Errorf("insecure permissions for %s, attempting to fix", path))
+		fatal(os.MkdirAll(_config.chroot, 0755))
+	}
+	if false {
+		//warn(fmt.Errorf("insecure permissions for %s, attempting to fix", path))
+		fatal(os.Chown(_config.chroot, _config.user.uid, _config.user.gid))
+	}
 	fatal(os.Chdir(_config.chroot))
 	fatal(syscall.Chroot(_config.chroot))
 
@@ -147,17 +164,24 @@ func chroot() {
 	// Make sure the rootCA files exist and are not world-readable.
 	keyfile := func(path string) string {
 		st, err := os.Stat(path)
-		if os.IsNotExist(err) {
-			fatal(err)
-		}
-		// TODO: How about just setting it?
+		fatal(err)
+
 		if st.Mode().Perm().String() != "-rw-------" {
-			fatal(fmt.Errorf("the permission of %v must be exactly -rw------- (or 0600); currently %s", path, st.Mode().Perm()))
+			warn(fmt.Errorf("insecure permissions for %s, attempting to fix", path))
+			err = os.Chmod(path, os.FileMode(0600))
+			fatal(err)
 		}
 
 		err = os.Chown(path, _config.user.uid, _config.user.gid)
 		fatal(err)
 		return path
+	}
+
+	if _, err := os.Stat(_config.root_key); os.IsNotExist(err) {
+		makeRootKey()
+	}
+	if _, err := os.Stat(_config.root_cert); os.IsNotExist(err) {
+		makeRootCert()
 	}
 
 	_config.root_key = keyfile(_config.root_key)

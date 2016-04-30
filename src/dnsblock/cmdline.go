@@ -28,6 +28,7 @@ Commands:
     help      Show this help
     version   Show version and exit
     server    Run as DNS/HTTP server
+    compile   Compile the host list
     status    Show server status
     cache     Control cache
     override  Control override
@@ -70,6 +71,26 @@ For systems that don't provide this, you'll need to use a wrapper.
 
 %[2]s
 
+`,
+	// Compile
+	"compile": `
+Usage: %[1]s compile [arguments]
+
+Compile all the hosts (as added with hostlist, host, unhostlist, and unhost in
+the configuration file) to one "compiled" file with duplicates and redundant
+entries removed. dnsblock doesn't do this automatically on startup since this is
+a comparativly expensive operation.
+
+In the default configuration, the amount of hosts are reduced from 45,608
+entries (875Kb) to 36,798 entries (678Kb). If we include some overhead for every
+item, then this seems to save a total of about 480Kb. It also makes some lookups
+slightly faster.
+
+The result is written to /compiled-hosts in the chroot directory and is used
+automatically if its mtime is not older than cache-hosts. If it's older dnsblock
+will show a warning and ignore the file.
+
+%[2]s
 `,
 
 	// Status
@@ -151,7 +172,7 @@ func cmdline() (command string) {
 	fatal(err)
 
 	show_help := false
-	config := "config"
+	config := "/etc/dnsblock/config"
 
 	for opt, arg := range args {
 		switch opt {

@@ -28,7 +28,7 @@ func TestParse(t *testing.T) {
 	var tmp string
 	tmp = mktmp("dns-listen")
 
-	_=tmp
+	_ = tmp
 	// fatal() will just exit, we should probably refactor that
 	//(&config_t{}).parse(tmp)
 }

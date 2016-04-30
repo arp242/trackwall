@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/local/bin/dnsblock server -v 2>&1
