@@ -15,11 +15,11 @@
 # Note that option keys *must not* have leading whitespace, this:
 #
 # user _dnsblock
-#  chroot /var/lib/dnsblock
+#  chroot /var/dnsblock
 #
 # is seen as:
 #
-# user _dnsblock chroot /var/lib/dnsblock
+# user _dnsblock chroot /var/dnsblock
 #
 # Which is an error, since the user option takes only one argument.
 #
@@ -37,6 +37,8 @@ dns-listen 127.0.0.53:53
 # Forward allowed requests to this nameserver.
 #dns-forward 127.0.1.1:53
 # Get first nameserver value from /etc/resolv.conf that is not dns-listen
+# NOTE: you don't want to do this if you're using musl libc, since that sends a
+# query to *all* nameservers and uses whichever one responds fastest.
 dns-forward auto
 
 # We serve no-op or "surrogate" scripts from a HTTP server
@@ -52,7 +54,7 @@ root-key /rootCA.key
 user _dnsblock
 
 # Chroot directory
-chroot /var/lib/dnsblock
+chroot /var/dnsblock
 
 # Cache DNS responses. Note that dnsblock does *not* cache the actual DNS
 # responses (that's the resolver's job), it merly caches whatever action is

@@ -17,6 +17,11 @@ import (
 	syscall "golang.org/x/sys/unix"
 )
 
+// Prefix a path with the chroot dir.
+func chrootdir(path string) (path_with_chroot string) {
+	return _config.chroot + "/" + path
+}
+
 func realpath(path string) (string, error) {
 	path = filepath.Clean(path)
 	// TODO: Errors out if dest doesn't exist
@@ -42,6 +47,8 @@ func drop_privs() {
 	if runtime.GOOS == "linux" {
 		return
 	}
+
+	info("dropping privileges")
 
 	err := syscall.Setresgid(_config.user.gid, _config.user.gid, _config.user.gid)
 	fatal(err)

@@ -2,7 +2,7 @@ syntax: glob
 .nfs*
 
 syntax: regexp
-^dnsblock
+^dnsblock-
 ^pkg
 ^src/github.com/
 ^src/golang.org/

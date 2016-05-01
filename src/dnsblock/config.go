@@ -482,9 +482,10 @@ func (s *sources_t) loadCachedURL(url string) (*os.File, error) {
 		return os.Open(url[7:])
 	}
 
+	// TODO: Check error (e.g. perm. denied)
 	os.MkdirAll("/cache/hosts", 0755)
-
 	cachename := "/cache/hosts/" + regexp.MustCompile(`\W+`).ReplaceAllString(url, "-")
+
 	stat, err := os.Stat(cachename)
 	if err != nil && !os.IsNotExist(err) {
 		fatal(err)

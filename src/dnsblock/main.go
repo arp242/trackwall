@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const (
@@ -56,6 +57,8 @@ var (
 )
 
 func main() {
+	info("starting dnsblock")
+
 	command := cmdline()
 
 	switch command {
@@ -118,6 +121,10 @@ func listen() {
 	defer dns_udp.Shutdown()
 	defer dns_tcp.Shutdown()
 
+	// Wait for the servers to start.
+	// TODO: This should be better.
+	time.Sleep(2 * time.Second)
+
 	// Drop privileges
 	drop_privs()
 
@@ -143,19 +150,31 @@ func listen() {
 // Setup chroot() from the information in _config
 func chroot() {
 	info(fmt.Sprintf("chrooting to %v", _config.chroot))
-	if false {
-		//warn(fmt.Errorf("insecure permissions for %s, attempting to fix", path))
+
+	// Make sure the chroot dir exists with the correct permissions and such
+	_, err := os.Stat(_config.chroot)
+	if os.IsNotExist(err) {
+		warn(fmt.Errorf("chroot dir %s doesn't exist, attempting to create", _config.chroot))
 		fatal(os.MkdirAll(_config.chroot, 0755))
-	}
-	if false {
-		//warn(fmt.Errorf("insecure permissions for %s, attempting to fix", path))
 		fatal(os.Chown(_config.chroot, _config.user.uid, _config.user.gid))
 	}
+
+	// TODO: We do this *before* the chroot since on OpenBSD it needs access to
+	// /dev/urandom, which we don't have in the chroot (and I'd rather not add
+	// this as a dependency).
+	// This should be fixed in Go 1.7 by using getentropy() (see #13785, #14572)
+	if _, err := os.Stat(chrootdir(_config.root_key)); os.IsNotExist(err) {
+		makeRootKey()
+	}
+	if _, err := os.Stat(chrootdir(_config.root_cert)); os.IsNotExist(err) {
+		makeRootCert()
+	}
+
 	fatal(os.Chdir(_config.chroot))
 	fatal(syscall.Chroot(_config.chroot))
 
-	// Setup /etc/resolv.conf in the chroot for go's resolver
-	err := os.MkdirAll("/etc", 0755)
+	// Setup /etc/resolv.conf in the chroot for Go's resolver
+	err = os.MkdirAll("/etc", 0755)
 	fatal(err)
 	fp, err := os.Create("/etc/resolv.conf")
 	defer fp.Close()
@@ -168,20 +187,12 @@ func chroot() {
 
 		if st.Mode().Perm().String() != "-rw-------" {
 			warn(fmt.Errorf("insecure permissions for %s, attempting to fix", path))
-			err = os.Chmod(path, os.FileMode(0600))
-			fatal(err)
+			fatal(os.Chmod(path, os.FileMode(0600)))
 		}
 
 		err = os.Chown(path, _config.user.uid, _config.user.gid)
 		fatal(err)
 		return path
-	}
-
-	if _, err := os.Stat(_config.root_key); os.IsNotExist(err) {
-		makeRootKey()
-	}
-	if _, err := os.Stat(_config.root_cert); os.IsNotExist(err) {
-		makeRootCert()
 	}
 
 	_config.root_key = keyfile(_config.root_key)

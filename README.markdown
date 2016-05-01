@@ -16,7 +16,7 @@ and is suffering from some problems.
 Advantages:
 
 - Lightweight.
-- Browser independent. Also works for requests outside the browser.
+- Browser independent − also works for requests outside the browser.
 
 To be fair, there are some disadvantages as well:
 
@@ -43,97 +43,59 @@ You can download and build it with:
 	$ hg clone http://code.arp242.net/dnsblock
 	$ cd dnsblock
 	$ ./build.sh
+	$ ./install.sh
 
-Generic setup
--------------
-The setup steps are somehow OS-specific, the `./instal.sh` script should take of
-that though. It's interactive and asks for confirmation on every step. Here are
-the general instructions:
 
-- Add the `_dnsblock` user.
+Setting up `/etc/resolv.conf`
+-----------------------------
+After dnsblock is up and running you'll need to tell the OS to actually use it.
+This is usually done by adding `nameserver <addr>` to `/etc/resolv.conf`. Most
+systems auto-generate this file (usually from DHCP).
 
-- Make the chroot directory.
+### OpenBSD
+Set `/etc/dhclient.conf` to something like:
 
-- Make a X509 certificate in the chroot directory. This is required to serve
-  surrogate scripts over https. dnsblock will generate a new certificate with
-  the correct domain name signed with this root CA. You'll have to install it in
-  your OS/browser to make this work.  
-  **Keep these files private!**
+	# The installer adds this line, not strictly needed
+	send host-name "yourhostname";
 
-- You may also want to configure your browser (see "Browser setup" section).
+	# List our nameserver first
+	prepend domain-name-servers 127.0.0.53;
 
-Specific instructions for various systems are below (again, this is the same as
-what `./install.sh` does).
+Running `sh /etc/netstart` will apply the settings.
 
-OS specific setup
------------------
+If you want to listen on the loopback interface that is not `127.0.0.1` (which
+is the case by default) you'll have to add that address as an alias, which can
+be done in `/etc/hostname.lo0`:
 
-### Ubuntu
-- Setup user and chroot directory:
+	inet alias 127.0.0.53
 
-		$ useradd _dnsblock -d /var/lib/dnsblock -s /bin/false
-		$ mkdir /var/lib/dnsblock
-		$ chown _dnsblock:_dnsblock /var/lib/dnsblock/
-
-- Generate a root certificate:
-
-		$ openssl genrsa -out /var/lib/dnsblock/rootCA.key 2048
-		$ openssl req -x509 -new -nodes -key /var/lib/dnsblock/rootCA.key -sha256 -days 1024 -out /var/lib/dnsblock/rootCA.pem
-
-		$ chown _dnsblock:_dnsblock /var/lib/dnsblock/rootCA*
-		$ chmod 600 /var/lib/dnsblock/rootCA*
-
-- Setup resolv.conf:
-
-		$ sudo resolvconf --disable-updates
-
-	And then edit `/etc/resolv.conf` by hand. Needs to be done after every
-	reboot.
-
-	There is probably a better way of doing this, but fuck, this is an
-	overcomplicated piece of shit with retarded documentation and at least three
-	different "standard" ways of configuring the fucking network...
+Running `sh /etc/netstart` will apply the settings.
 
 ### VoidLinux
-
-Uses `dhcpcd`, add to `/etc/resolv.conf.head`:
+If you're using the GNU libc version then setting `/etc/resolv.conf.head` to:
 
     nameserver 127.0.0.53
 
-/usr/libexec/dhcpcd-hooks/90-resolv.conf
+should be enough.
+
+**Note**: if you're using the musl libc version then this won't work as
+expected, since musl's resolvers sends a query to *all* nameservers and uses
+whichever one responds fastest, so you'll need to set *only* dnsblock as the
+nameserver. This can be done by creating
+`/usr/libexec/dhcpcd-hooks/90-resolv.conf` with:
 
 	#!/bin/sh
 	echo 'nameserver 127.0.0.53' > /etc/resolv.conf
 
+Don't forget to make this executable! You'll also need to set the `dns-forward`
+setting manually in `/etc/dnsblock/config`.
 
-### OpenBSD
-- Setup user and chroot directory:
+### Ubuntu
+Set `/etc/resolvconf/resolv.conf.d/head` to:
 
-		$ useradd -d /var/lib/dnsblock -s /sbin/nologin _dnsblock
-		$ mkdir /var/lib/dnsblock
-		$ chown _dnsblock:_dnsblock /var/lib/dnsblock/
+	nameserver 127.0.0.53
 
-- Setup resolv.conf:
-
-	Set `/etc/dhclient.conf` to something like:
-
-		# The installer adds this line, not strictly needed
-		send host-name "yourhostname";
-
-		# List our nameserver first
-		prepend domain-name-servers 127.0.0.53;
-
-	Running `sh /etc/netstart` will apply the settings.
-
-- Set alias for `lo0`:
-
-	If you want to listen on the loopback interface that is not `127.0.0.1` (which
-	is the case by default) you'll have to add that address as an alias, which can
-	be done in `/etc/hostname.lo0`:
-
-		inet alias 127.0.0.53
-
-	Running `sh /etc/netstart` will apply the settings.
+and run `resolvconf -u`
 
 Browser setup
 --------------
@@ -143,14 +105,14 @@ TODO
 
 - Install root certificate
 
-**NOTE!** Make sure the certificate is readable! Firefix will **NOT** show an
+**NOTE!** Make sure the certificate is readable! Firefox will **NOT** show an
 error or warning if it's not.
 
-		$ openssl genrsa -out /var/lib/dnsblock/rootCA.key 2048
-		$ openssl req -x509 -new -nodes -key /var/lib/dnsblock/rootCA.key -sha256 -days 1024 -out /var/lib/dnsblock/rootCA.pem
+		$ openssl genrsa -out /var/dnsblock/rootCA.key 2048
+		$ openssl req -x509 -new -nodes -key /var/dnsblock/rootCA.key -sha256 -days 1024 -out /var/dnsblock/rootCA.pem
 
-		$ chown _dnsblock:_dnsblock /var/lib/dnsblock/rootCA*
-		$ chmod 600 /var/lib/dnsblock/rootCA*
+		$ chown _dnsblock:_dnsblock /var/dnsblock/rootCA*
+		$ chmod 600 /var/dnsblock/rootCA*
 
 How it works
 ============
@@ -162,11 +124,13 @@ will be resolved to:
 
 	http://127.0.0.53:80/some_script.js
 
-dnsblock also runs a HTTP server at `127.0.0.53:80` which will:
+dnsblock also runs a HTTP server at `127.0.0.53:80` which will either:
 
-- Serve some no-ops for some common scripts so webpages don't error out (Google
-  Analytics, AddThis).
-- Serve a simply 0-byte response with a guessed Content-Type
+1. Serve some no-ops for some common scripts so web pages don't error out
+   (Google Analytics, AddThis).
+2. Serve an simple HTML or JS page informing the user that this request is
+   blocked. This is a useful so that you don't have to guess *why* a request
+   doesn't work and to keep the error log clutter-free.
 
 ChangeLog
 =========
@@ -175,7 +139,6 @@ No release yet. This is experimental software.
 TODO
 ====
 - Figure out a better name
-- Write proper installation instructions (and probably script as well)
 - Better https
 - Listen to signals to reload
 - Measure some degree of performance
@@ -188,7 +151,7 @@ Will this serve as a local DNS resolver and/or cache?
 No. This is not a DNS resolver/cache, just a proxy/filter. If you're looking for
 a DNS cache then [unbound][unbound] is a good option. Running both on even an
 older system should be fine (the dnsblock author is running them both on a
-ten-year old laptop).
+ten-year old OpenBSD laptop).
 
 This program sucks. What alternatives are there?
 ================================================
@@ -199,6 +162,7 @@ Here are some similar programs:
 
 - [adsuck](https://github.com/conformal/adsuck) (POSIX systems)
 - [Little Snitch](https://www.obdev.at/products/littlesnitch/index.html) (OSX)
+- [dnsblock](https://github.com/torrentkino/dnsblock)
 
 
 Authors and license

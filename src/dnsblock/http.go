@@ -333,26 +333,35 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	return &tlscert, nil
 }
 
-// openssl genrsa -out /var/lib/dnsblock/rootCA.key 2048
+// openssl genrsa -out /var/dnsblock/rootCA.key 2048
+// NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
 func makeRootKey() {
 	warn(fmt.Errorf("generating a new root key at %s", _config.root_key))
+
+	p := chrootdir(_config.root_key)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	fatal(err)
 
-	fp, err := os.Create(_config.root_key)
+	fp, err := os.Create(p)
 	fatal(err)
 
 	pem.Encode(fp, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 	fp.Close()
+
+	fatal(os.Chmod(p, os.FileMode(0600)))
 }
 
-// openssl req -x509 -new -nodes -key /var/lib/dnsblock/rootCA.key -sha256 -days 1024 -out /var/lib/dnsblock/rootCA.pem
+// openssl req -x509 -new -nodes -key /var/dnsblock/rootCA.key -sha256 -days 1024 -out /var/dnsblock/rootCA.pem
 // TODO: certs generated with this don't work :-/
+// NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
 func makeRootCert() {
 	warn(fmt.Errorf("generating a new root certificate at %s", _config.root_cert))
 
-	fp, err := os.Open(_config.root_key)
+	key := chrootdir(_config.root_key)
+	p := chrootdir(_config.root_cert)
+
+	fp, err := os.Open(key)
 	data, err := ioutil.ReadAll(fp)
 	rootpem, _ := pem.Decode(data)
 	fp.Close()
@@ -378,11 +387,13 @@ func makeRootCert() {
 
 	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, &rootkey.PublicKey, rootkey)
 	fatal(err)
-	fp, err = os.Create(_config.root_cert)
+	fp, err = os.Create(p)
 	fatal(err)
 
 	pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
 	fp.Close()
+	
+	fatal(os.Chmod(p, os.FileMode(0600)))
 }
 
 // The MIT License (MIT)

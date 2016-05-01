@@ -10,8 +10,8 @@ WantedBy=multi-user.target
 Type=simple
 User=root
 Group=root
-#WorkingDirectory=/www
-ExecStart=dnsblock
+# Must be absolute...
+ExecStart=/usr/local/sbin/dnsblock server -v
 KillMode=process
 Restart=on-success
 PrivateTmp=true

@@ -1,9 +1,11 @@
-all:
+all: build
+
+build:
 	./build.sh
 
-install:
+install: build
 	./install.sh
 
 clean:
-	rm -v dnsblock
-	rm -rv pkg
+	rm -vf dnsblock
+	rm -rvf pkg
