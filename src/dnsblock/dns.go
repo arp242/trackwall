@@ -16,26 +16,26 @@ import (
 // Setup DNS server
 // TODO: Splitting out the binding of the socket and starting a server is not
 // easy, so we don't...
-func listenDns() (*dns.Server, *dns.Server) {
-	dns.HandleFunc(".", handleDns)
+func listenDNS() (*dns.Server, *dns.Server) {
+	dns.HandleFunc(".", handleDNS)
 
-	dns_udp := &dns.Server{Addr: _config.dns_listen.String(), Net: "udp"}
+	dnsUDP := &dns.Server{Addr: _config.dnsListen.String(), Net: "udp"}
 	go func() {
-		err := dns_udp.ListenAndServe()
+		err := dnsUDP.ListenAndServe()
 		fatal(err)
 	}()
 
-	dns_tcp := &dns.Server{Addr: _config.dns_listen.String(), Net: "tcp"}
+	dnsTCP := &dns.Server{Addr: _config.dnsListen.String(), Net: "tcp"}
 	go func() {
-		err := dns_tcp.ListenAndServe()
+		err := dnsTCP.ListenAndServe()
 		fatal(err)
 	}()
 
-	return dns_udp, dns_tcp
+	return dnsUDP, dnsTCP
 }
 
 // Handle a DNS request
-func handleDns(w dns.ResponseWriter, req *dns.Msg) {
+func handleDNS(w dns.ResponseWriter, req *dns.Msg) {
 	name := strings.TrimRight(req.Question[0].Name, ".")
 
 	// Wait until _hosts are loaded, except when downloading the host lists
@@ -56,26 +56,26 @@ func handleDns(w dns.ResponseWriter, req *dns.Msg) {
 	// We only need to spoof A and AAAA records
 	t := dns.TypeToString[req.Question[0].Qtype]
 	if t != "A" && t != "AAAA" {
-		forward(_config.dns_forward.String(), w, req)
+		forward(_config.dnsForward.String(), w, req)
 		return
 	}
 
-	response, from_cache := getResponse(name, t)
+	response, fromCache := getResponse(name, t)
 	switch response {
-	case RESPONSE_FORWARD:
-		if !from_cache {
+	case reponseForward:
+		if !fromCache {
 			//info(fmt.Sprintf("%sorward  %v", greenbg("f"), name))
 			infoc(fmt.Sprintf("forward  %v", name), "green")
 		}
-		forward(_config.dns_forward.String(), w, req)
-	case RESPONSE_SPOOF:
-		if !from_cache {
+		forward(_config.dnsForward.String(), w, req)
+	case reponseSpoof:
+		if !fromCache {
 			//info(fmt.Sprintf("%spoof    %v", orangebg("s"), name))
 			infoc(fmt.Sprintf("spoof    %v", name), "orange")
 		}
 		spoof(name, w, req)
-	case RESPONSE_EMPTY:
-		if !from_cache {
+	case reponseEmty:
+		if !fromCache {
 			//info(fmt.Sprintf("empty  %v", name))
 		}
 		spoofEmpty(w, req)
@@ -84,28 +84,28 @@ func handleDns(w dns.ResponseWriter, req *dns.Msg) {
 
 // Get response from cache (if it exists and is not expired), or determine a new
 // response.
-func getResponse(name, t string) (response uint8, from_cache bool) {
+func getResponse(name, t string) (response uint8, fromCache bool) {
 	// First check override
 	// TODO: It might be better/faster to clear cache entries when adding
 	// override?
-	if haveOverride(name) {
-		return RESPONSE_FORWARD, false
+	if checkOverride(name) {
+		return reponseForward, false
 	}
 
 	cachekey := t + " " + name
 	_cachelock.Lock()
-	cache, have_cache := _cache[cachekey]
+	cache, haveCache := _cache[cachekey]
 	_cachelock.Unlock()
 
-	if have_cache && cache.expires > time.Now().Unix() {
+	if haveCache && cache.expires > time.Now().Unix() {
 		return cache.response, true
 	}
 
 	response = determineResponse(name, t)
 
 	_cachelock.Lock()
-	_cache[cachekey] = cache_t{
-		expires:  time.Now().Unix() + int64(_config.cache_dns),
+	_cache[cachekey] = cacheT{
+		expires:  time.Now().Unix() + int64(_config.cacheDNS),
 		response: response,
 	}
 	_cachelock.Unlock()
@@ -113,71 +113,71 @@ func getResponse(name, t string) (response uint8, from_cache bool) {
 	return response, false
 }
 
-func haveOverride(name string) bool {
+func checkOverride(name string) bool {
 	// Check override
-	expires, have_override := _override_hosts[name]
+	expires, haveOverride := _overrideHosts[name]
 
-	if !have_override {
+	if !haveOverride {
 		labels := strings.Split(name, ".")
 		c := ""
 		l := len(labels)
-		for i := 0; i < l; i += 1 {
+		for i := 0; i < l; i++ {
 			if c == "" {
 				c = labels[l-i-1]
 			} else {
 				c = labels[l-i-1] + "." + c
 			}
 
-			expires, have_override = _override_hosts[c]
-			if have_override {
+			expires, haveOverride = _overrideHosts[c]
+			if haveOverride {
 				break
 			}
 		}
 	}
 
 	// Make sure it's not expires
-	if have_override {
+	if haveOverride {
 		if time.Now().Unix() > expires {
-			delete(_override_hosts, name)
-			have_override = false
+			delete(_overrideHosts, name)
+			haveOverride = false
 		}
 	}
 
-	return have_override
+	return haveOverride
 }
 
 // Determine what to do with the hostname name. Returns a RESPONSE_* constant.
 func determineResponse(name, t string) uint8 {
-	var do_spoof bool
+	var doSpoof bool
 
-	have_override := haveOverride(name)
-	if have_override {
-		do_spoof = false
+	haveOverride := checkOverride(name)
+	if haveOverride {
+		doSpoof = false
 	}
 
-	if !have_override {
+	if !haveOverride {
 		// Hosts
 		labels := strings.Split(name, ".")
 		c := ""
 		l := len(labels)
-		for i := 0; i < l; i += 1 {
+		for i := 0; i < l; i++ {
 			if c == "" {
 				c = labels[l-i-1]
 			} else {
 				c = labels[l-i-1] + "." + c
 			}
 
-			_, do_spoof = _hosts[c]
-			if do_spoof {
+			_, doSpoof = _hosts[c]
+			if doSpoof {
 				break
 			}
 		}
 
 		// Regexps
-		if !do_spoof {
+		if !doSpoof {
 			for _, r := range _regexps {
 				if r.MatchString(name) {
-					do_spoof = true
+					doSpoof = true
 					break
 				}
 			}
@@ -191,19 +191,19 @@ func determineResponse(name, t string) uint8 {
 	// daemons, HTTP servers, etc. (/etc/resolv.conf doesn't support adding a
 	// port number). IPv6 only has one loopback address (::1) and nota /8 like
 	// IPv4...
-	if do_spoof && t == "AAAA" {
-		return RESPONSE_EMPTY
-	} else if do_spoof {
-		return RESPONSE_SPOOF
+	if doSpoof && t == "AAAA" {
+		return reponseEmty
+	} else if doSpoof {
+		return reponseSpoof
 	} else {
-		return RESPONSE_FORWARD
+		return reponseForward
 	}
 }
 
 // Spoof DNS response by replying with the address of our HTTP server. This only
 // does A records.
 func spoof(name string, w dns.ResponseWriter, req *dns.Msg) {
-	spec := fmt.Sprintf("%s. 1 IN A %s", name, _config.http_listen.host)
+	spec := fmt.Sprintf("%s. 1 IN A %s", name, _config.httpListen.host)
 	rr, err := dns.NewRR(spec)
 	fatal(err)
 
@@ -223,6 +223,12 @@ func sendSpoof(answer []dns.RR, w dns.ResponseWriter, req *dns.Msg) {
 	msg.MsgHdr.RecursionDesired = true
 	msg.MsgHdr.RecursionAvailable = true
 	msg.Question = req.Question
+
+	// Set cache to 0
+	for i := range answer {
+		answer[i].Header().Ttl = 0
+	}
+
 	msg.Answer = answer
 	msg.Ns = []dns.RR{}
 	msg.Extra = []dns.RR{}

@@ -16,7 +16,7 @@ import (
 )
 
 func bindCtl() net.Listener {
-	l, err := net.Listen("tcp", _config.control_listen.String())
+	l, err := net.Listen("tcp", _config.controlListen.String())
 	fatal(err)
 	return l
 }
@@ -35,7 +35,7 @@ func setupCtlHandle(l net.Listener) {
 }
 
 func handleCtl(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	data, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
@@ -96,7 +96,7 @@ func handleCache(cmd string, w net.Conn) (out string) {
 	switch cmd {
 	case "flush":
 		_cachelock.Lock()
-		_cache = make(map[string]cache_t)
+		_cache = make(map[string]cacheT)
 		_cachelock.Unlock()
 	default:
 		out = "error: unknown subcommand"
@@ -109,7 +109,7 @@ func handleOverride(cmd string, w net.Conn) (out string) {
 	switch cmd {
 	case "flush":
 		// TODO: lock!
-		_override_hosts = make(map[string]int64)
+		_overrideHosts = make(map[string]int64)
 	default:
 		out = "error: unknown subcommand"
 	}
@@ -150,7 +150,7 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 			fmt.Fprintf(w, fmt.Sprintf("%v\n", v))
 		}
 	case "override":
-		scs.Fdump(w, _override_hosts)
+		scs.Fdump(w, _overrideHosts)
 	default:
 		out = "error: unknown subcommand"
 	}
@@ -159,9 +159,9 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 }
 
 func writeCtl(what string) {
-	conn, err := net.Dial("tcp", _config.control_listen.String())
+	conn, err := net.Dial("tcp", _config.controlListen.String())
 	fatal(err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	fmt.Fprintf(conn, what+"\n")
 	data, err := ioutil.ReadAll(conn)

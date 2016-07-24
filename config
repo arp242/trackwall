@@ -185,7 +185,8 @@ surrogate .*googletag(manager|services)\.com$
 	defineSlot:function(){return googletag},
 	addService:function(){return googletag},
 	companionAds:function(){return googletag},
-	pubads:function(){return googletag}
+	pubads:function(){return googletag},
+	publish:function(){return googletag}
 	}
 
 ###########################
@@ -193,6 +194,6 @@ surrogate .*googletag(manager|services)\.com$
 ###########################
 
 source /etc/dnsblock/config.added
-source /etc/dnsblock/config.local
+#source /etc/dnsblock/config.local
 
 # vim:ft=config

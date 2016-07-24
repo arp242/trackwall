@@ -1,7 +1,4 @@
 // Process commandline arguments
-// TODO: Much of this file is ad-hoc and not exactly great. I wasn't able to get
-// the flags package to do what I wanted. It works well enough for now but I
-// should revisit this before a 1.0 release.
 package main
 
 import (
@@ -16,7 +13,7 @@ var _usage = map[string]string{
 Global options:
     -v        Verbose output
     -h        Show help
-    -f        Path to the configuration file
+    -f path   Path to the configuration file
 
 `,
 
@@ -79,12 +76,10 @@ Usage: %[1]s compile [arguments]
 Compile all the hosts (as added with hostlist, host, unhostlist, and unhost in
 the configuration file) to one "compiled" file with duplicates and redundant
 entries removed. dnsblock doesn't do this automatically on startup since this is
-a comparativly expensive operation.
+a comparatively expensive operation.
 
-In the default configuration, the amount of hosts are reduced from 45,608
-entries (875Kb) to 36,798 entries (678Kb). If we include some overhead for every
-item, then this seems to save a total of about 480Kb. It also makes some lookups
-slightly faster.
+You don't strictly need to do this, but it will make the program run start up
+and run slightly faster.
 
 The result is written to /compiled-hosts in the chroot directory and is used
 automatically if its mtime is not older than cache-hosts. If it's older dnsblock
@@ -161,23 +156,16 @@ Get all log messages
 }
 
 // Process commandline arguments
-func cmdline() (command string) {
-	// No command, print help
-	if len(os.Args) < 2 {
-		usage("global", "")
-		return
-	}
-
-	args, err := getopt(os.Args[2:], "")
+func cmdline(args []string) []string {
+	opts, words, err := getopt(args, "")
 	fatal(err)
 
-	show_help := false
+	showHelp := false
 	config := "/etc/dnsblock/config"
-
-	for opt, arg := range args {
+	for opt, arg := range opts {
 		switch opt {
 		case "-h":
-			show_help = true
+			showHelp = true
 		case "-f":
 			config = arg
 		case "-v":
@@ -185,14 +173,17 @@ func cmdline() (command string) {
 		}
 	}
 
-	if show_help {
-		usage(os.Args[1], "")
+	if showHelp {
+		if len(words) == 0 {
+			usage("global", "")
+		} else {
+			usage(words[0], "")
+		}
 		os.Exit(0)
 	}
 
 	_config.parse(config, true)
-
-	return os.Args[1]
+	return words
 }
 
 // Print usage info
@@ -211,14 +202,43 @@ func usage(name, err string) {
 	}
 }
 
-// A rudimentary getopt()...
-func getopt(args []string, shortopts string) (parsed map[string]string, err error) {
-	// Always accept these
+// TODO: Support long --options
+func getopt(args []string, shortopts string) (opts map[string]string, words []string, err error) {
 	shortopts += "hvf:"
 
-	parsed = make(map[string]string)
-	for argi, arg := range args {
+	// First split args into separate options so that "-hv" and "-hf myfile"
+	// work.
+	newargs := []string{}
+	for _, arg := range args {
+		// Command
 		if !strings.HasPrefix(arg, "-") {
+			newargs = append(newargs, arg)
+			continue
+		}
+
+		// Long option
+		if strings.HasPrefix(arg, "--") {
+			newargs = append(newargs, arg)
+			continue
+		}
+
+		for _, char := range arg[1:] {
+			newargs = append(newargs, fmt.Sprintf("-%v", string(char)))
+		}
+	}
+
+	args = newargs
+
+	// Now parse the options
+	opts = make(map[string]string)
+	stopParsing := false
+	for argi, arg := range args {
+		if arg == "--" {
+			stopParsing = true
+		}
+
+		if !strings.HasPrefix(arg, "-") || stopParsing {
+			words = append(words, arg)
 			continue
 		}
 
@@ -229,15 +249,14 @@ func getopt(args []string, shortopts string) (parsed map[string]string, err erro
 
 			if string(shortopts[chari+1]) == ":" {
 				if len(args) <= argi+1 {
-					return parsed, fmt.Errorf("the option %s requires an argument", arg)
-				} else {
-					parsed[arg] = args[argi+1]
+					return opts, words, fmt.Errorf("the option %s requires an argument", arg)
 				}
+				opts[arg] = args[argi+1]
 			} else {
-				parsed[arg] = ""
+				opts[arg] = ""
 			}
 		}
 	}
 
-	return parsed, nil
+	return opts, words, nil
 }

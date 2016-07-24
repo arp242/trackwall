@@ -9,19 +9,20 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 )
 
 const (
-	RESPONSE_FORWARD = 1
-	RESPONSE_SPOOF   = 2
-	RESPONSE_EMPTY   = 3
+	reponseForward = 1
+	reponseSpoof   = 2
+	reponseEmty    = 3
 )
 
 // Cache entry
-type cache_t struct {
+type cacheT struct {
 	// We don't cache the actual DNS responses − that's the resolver's job. We
 	// just cache the action taken. That's enough and saves some time in
 	// processing regexps and such
@@ -31,13 +32,13 @@ type cache_t struct {
 }
 
 var (
-	_config config_t
+	_config configT
 
 	// Static hosts added with hostlist/host. The key is the hostname, the
 	// (optional) value is a surrogate script to serve.
 	_hosts = make(map[string]string)
 
-	_surrogates []surrogate_t
+	_surrogates []surrogateT
 
 	// Compiled regexes added with regexlist/regex. Pre-compiling the surrogate
 	// scripts isn't possible here.
@@ -46,10 +47,10 @@ var (
 	// Hosts to override; value is timestamp, once that's expired the entry will be
 	// removed from the list
 	// Also used for the regexps.
-	_override_hosts = make(map[string]int64)
+	_overrideHosts = make(map[string]int64)
 
 	// Cache DNS responses, the key is the hostname to cache
-	_cache     = make(map[string]cache_t)
+	_cache     = make(map[string]cacheT)
 	_cachelock sync.RWMutex
 
 	// Print more info to the screen
@@ -59,51 +60,74 @@ var (
 func main() {
 	info("starting dnsblock")
 
-	command := cmdline()
+	if len(os.Args) < 2 {
+		usage("global", "")
+		os.Exit(0)
+	}
+	commands := cmdline(os.Args[1:])
+	if len(commands) == 0 {
+		usage("global", "")
+		os.Exit(0)
+	}
 
-	switch command {
+	switch commands[0] {
 	case "help":
-		if len(os.Args) > 2 {
-			usage(os.Args[2], "")
+		if len(commands) > 1 {
+			usage(commands[1], "")
 		} else {
 			usage("global", "")
 		}
 	case "version":
+		if len(commands) > 1 {
+			usage("version", "version does not accept commands")
+		}
 		fmt.Println("0.1")
 	case "server":
+		if len(commands) > 1 {
+			usage("version", "server does not accept commands")
+		}
 		listen()
 	case "compile":
+		if len(commands) > 1 {
+			usage("version", "compile does not accept commands")
+		}
 		compile()
 	case "status":
-		if len(os.Args) < 3 {
+		if len(commands) < 2 {
 			usage("status", "status needs a command")
 		}
-		subcmd := os.Args[len(os.Args)-1]
-		writeCtl(command + " " + subcmd)
+		writeCtl(strings.Join(commands, " "))
 	case "cache":
-		if len(os.Args) < 3 {
+		if len(os.Args) < 2 {
 			usage("cache", "cache needs a command")
 		}
-		subcmd := os.Args[len(os.Args)-1]
-		writeCtl(command + " " + subcmd)
+		writeCtl(strings.Join(commands, " "))
 	case "override":
-		if len(os.Args) < 3 {
+		if len(os.Args) < 2 {
 			usage("override", "override needs a command")
 		}
-		subcmd := os.Args[len(os.Args)-1]
-		writeCtl(command + " " + subcmd)
+		writeCtl(strings.Join(commands, " "))
 	case "host":
-		fmt.Println("TODO")
+		if len(os.Args) < 2 {
+			usage("override", "override needs a command")
+		}
+		writeCtl(strings.Join(commands, " "))
 	case "regex":
-		fmt.Println("TODO")
+		if len(os.Args) < 2 {
+			usage("override", "override needs a command")
+		}
+		writeCtl(strings.Join(commands, " "))
 	case "log":
-		fmt.Println("TODO")
+		if len(os.Args) < 2 {
+			usage("override", "override needs a command")
+		}
+		writeCtl(strings.Join(commands, " "))
 	}
 }
 
 func compile() {
 	chroot()
-	drop_privs()
+	dropPrivs()
 
 	os.Remove("/cache/compiled")
 	_config.sources.read()
@@ -116,20 +140,20 @@ func listen() {
 
 	// Setup servers; the bind* function only sets up the socket.
 	ctl := bindCtl()
-	http, https := bindHttp()
-	dns_udp, dns_tcp := listenDns()
-	defer dns_udp.Shutdown()
-	defer dns_tcp.Shutdown()
+	http, https := bindHTTP()
+	dnsUDP, dnsTCP := listenDNS()
+	defer dnsUDP.Shutdown()
+	defer dnsTCP.Shutdown()
 
 	// Wait for the servers to start.
 	// TODO: This should be better.
 	time.Sleep(2 * time.Second)
 
 	// Drop privileges
-	drop_privs()
+	dropPrivs()
 
 	setupCtlHandle(ctl)
-	setupHttpHandle(http, https)
+	setupHTTPHandle(http, https)
 
 	// Read the hosts information *after* starting the DNS server because we can
 	// add hosts from remote sources (and thus needs DNS)
@@ -163,22 +187,25 @@ func chroot() {
 	// /dev/urandom, which we don't have in the chroot (and I'd rather not add
 	// this as a dependency).
 	// This should be fixed in Go 1.7 by using getentropy() (see #13785, #14572)
-	if _, err := os.Stat(chrootdir(_config.root_key)); os.IsNotExist(err) {
+	if _, err := os.Stat(chrootdir(_config.rootKey)); os.IsNotExist(err) {
 		makeRootKey()
 	}
-	if _, err := os.Stat(chrootdir(_config.root_cert)); os.IsNotExist(err) {
+	if _, err := os.Stat(chrootdir(_config.rootCert)); os.IsNotExist(err) {
 		makeRootCert()
 	}
 
 	fatal(os.Chdir(_config.chroot))
-	fatal(syscall.Chroot(_config.chroot))
+	err = syscall.Chroot(_config.chroot)
+	if err != nil {
+		fatal(fmt.Errorf("unable to chroot to %v: %v", _config.chroot, err.Error()))
+	}
 
 	// Setup /etc/resolv.conf in the chroot for Go's resolver
 	err = os.MkdirAll("/etc", 0755)
 	fatal(err)
 	fp, err := os.Create("/etc/resolv.conf")
 	defer fp.Close()
-	fp.Write([]byte(fmt.Sprintf("nameserver %s", _config.dns_listen.host)))
+	fp.Write([]byte(fmt.Sprintf("nameserver %s", _config.dnsListen.host)))
 
 	// Make sure the rootCA files exist and are not world-readable.
 	keyfile := func(path string) string {
@@ -195,8 +222,8 @@ func chroot() {
 		return path
 	}
 
-	_config.root_key = keyfile(_config.root_key)
-	_config.root_cert = keyfile(_config.root_cert)
+	_config.rootKey = keyfile(_config.rootKey)
+	_config.rootCert = keyfile(_config.rootCert)
 }
 
 // The MIT License (MIT)

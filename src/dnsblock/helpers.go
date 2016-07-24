@@ -18,7 +18,7 @@ import (
 )
 
 // Prefix a path with the chroot dir.
-func chrootdir(path string) (path_with_chroot string) {
+func chrootdir(path string) (pathWithChroot string) {
 	return _config.chroot + "/" + path
 }
 
@@ -30,7 +30,7 @@ func realpath(path string) (string, error) {
 }
 
 // Drop privileges
-func drop_privs() {
+func dropPrivs() {
 	// TODO Don't do this on Linux systems for now.
 	//
 	// Calls to this are peppered throughout since on Linux different threads can
@@ -121,7 +121,7 @@ func startCachePurger() {
 				if time.Now().Unix() > cache.expires {
 					delete(_cache, name)
 				}
-				i += 1
+				i++
 			}
 			_cachelock.Unlock()
 		}

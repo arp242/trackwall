@@ -37,14 +37,14 @@ const _list = `<html><head><title>dnsblock</title></head><body><ul>
 <li><a href="/$@_list/cache">cache</a></li>
 </ul></body></html>`
 
-func bindHttp() (l_http, l_https net.Listener) {
-	l_http, err := net.Listen("tcp", _config.http_listen.String())
+func bindHTTP() (listenHTTP, listenHTTPS net.Listener) {
+	listenHTTP, err := net.Listen("tcp", _config.httpListen.String())
 	fatal(err)
 
-	l_https, err = net.Listen("tcp", _config.https_listen.String())
+	listenHTTPS, err = net.Listen("tcp", _config.httpsListen.String())
 	fatal(err)
 
-	return l_http, l_https
+	return listenHTTP, listenHTTPS
 }
 
 // This is tcpKeepAliveListener
@@ -57,35 +57,35 @@ func (ln httpListener) Accept() (c net.Conn, err error) {
 	if err != nil {
 		return
 	}
-	// TODO: Test is 2 seconds works well enough...
+	// TODO: Test if 2 seconds works well enough...
 	tc.SetKeepAlive(true)
 	//tc.SetKeepAlivePeriod(3 * time.Minute)
 	tc.SetKeepAlivePeriod(2 * time.Second)
 	return tc, nil
 }
 
-func setupHttpHandle(l_http, l_https net.Listener) {
+func setupHTTPHandle(listenHTTP, listenHTTPS net.Listener) {
 	go func() {
-		srv := &http.Server{Addr: _config.http_listen.String()}
-		srv.Handler = &handleHttp{}
-		err := srv.Serve(httpListener{l_http.(*net.TCPListener)})
+		srv := &http.Server{Addr: _config.httpListen.String()}
+		srv.Handler = &handleHTTP{}
+		err := srv.Serve(httpListener{listenHTTP.(*net.TCPListener)})
 		fatal(err)
 	}()
 
 	go func() {
-		srv := &http.Server{Addr: _config.https_listen.String()}
-		srv.Handler = &handleHttp{}
+		srv := &http.Server{Addr: _config.httpsListen.String()}
+		srv.Handler = &handleHTTP{}
 		srv.TLSConfig = &tls.Config{GetCertificate: getCert}
 
-		tlsListener := tls.NewListener(httpListener{l_https.(*net.TCPListener)}, srv.TLSConfig)
+		tlsListener := tls.NewListener(httpListener{listenHTTPS.(*net.TCPListener)}, srv.TLSConfig)
 		err := srv.Serve(tlsListener)
 		fatal(err)
 	}()
 }
 
-type handleHttp struct{}
+type handleHTTP struct{}
 
-func (f *handleHttp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (f *handleHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Never cache anything here
 	w.Header().Set("Cache-Control", "private, max-age=0, no-cache, must-revalidate")
 
@@ -94,7 +94,7 @@ func (f *handleHttp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Special $@_ control URL
 	if strings.HasPrefix(url, "$@_") {
-		f.handleHttpSpecial(w, r, host, url)
+		f.handleHTTPSpecial(w, r, host, url)
 		return
 	}
 
@@ -107,6 +107,7 @@ func (f *handleHttp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Default blocked text
+	// TODO: Not reliable enough...
 	if strings.HasSuffix(url, ".js") {
 		// Add a comment so it won't give parse errors
 		// TODO: Make this a text message, rather than HTML
@@ -114,12 +115,12 @@ func (f *handleHttp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, fmt.Sprintf("/*"+_blocked+"*/", host, url))
 	} else {
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, fmt.Sprintf(_blocked, host, url))
+		fmt.Fprintf(w, fmt.Sprintf("/*"+_blocked+"*/", host, url))
 	}
 }
 
 // Handle "special" $@_ urls
-func (f *handleHttp) handleHttpSpecial(w http.ResponseWriter, r *http.Request, host, url string) {
+func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, host, url string) {
 	// $@_allow/duration/redirect
 	if strings.HasPrefix(url, "$@_allow") {
 		params := strings.Split(url, "/")
@@ -131,7 +132,7 @@ func (f *handleHttp) handleHttpSpecial(w http.ResponseWriter, r *http.Request, h
 		}
 
 		// TODO: Always add the shortest entry from the hosts here
-		_override_hosts[host] = time.Now().Add(time.Duration(secs) * time.Second).Unix()
+		_overrideHosts[host] = time.Now().Add(time.Duration(secs) * time.Second).Unix()
 
 		_cachelock.Lock()
 		delete(_cache, "A "+host)
@@ -264,7 +265,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		dbg("    Making a cert for " + name)
 
 		// Load root CA
-		fp, err := os.Open(_config.root_cert)
+		fp, err := os.Open(_config.rootCert)
 		data, err := ioutil.ReadAll(fp)
 		rootpem, _ := pem.Decode(data)
 		fp.Close()
@@ -276,7 +277,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		rootcert := *rootcerts[0]
 
 		// Load root key
-		fp, err = os.Open(_config.root_key)
+		fp, err = os.Open(_config.rootKey)
 		data, err = ioutil.ReadAll(fp)
 		rootpem, _ = pem.Decode(data)
 		fp.Close()
@@ -291,7 +292,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		template := x509.Certificate{
 			SerialNumber: serialNumber,
 			Subject: pkix.Name{
-				CommonName: "dnsblock root",
+				CommonName:   "dnsblock root",
 				Organization: []string{"dnsblock"},
 			},
 			NotBefore: time.Now().Add(-24 * time.Hour),
@@ -324,7 +325,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// We can now use the files to make a TLS certificate
 	dbg(fmt.Sprintf("tls %s, %s", certfile, keyfile))
 	//tlscert, err := tls.LoadX509KeyPair(certfile, keyfile)
-	tlscert, err := tls.LoadX509KeyPair(certfile, _config.root_key)
+	tlscert, err := tls.LoadX509KeyPair(certfile, _config.rootKey)
 	if err != nil {
 		warn(err)
 		return nil, err
@@ -336,9 +337,9 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 // openssl genrsa -out /var/dnsblock/rootCA.key 2048
 // NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
 func makeRootKey() {
-	warn(fmt.Errorf("generating a new root key at %s", _config.root_key))
+	warn(fmt.Errorf("generating a new root key at %s", _config.rootKey))
 
-	p := chrootdir(_config.root_key)
+	p := chrootdir(_config.rootKey)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	fatal(err)
@@ -353,13 +354,12 @@ func makeRootKey() {
 }
 
 // openssl req -x509 -new -nodes -key /var/dnsblock/rootCA.key -sha256 -days 1024 -out /var/dnsblock/rootCA.pem
-// TODO: certs generated with this don't work :-/
 // NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
 func makeRootCert() {
-	warn(fmt.Errorf("generating a new root certificate at %s", _config.root_cert))
+	warn(fmt.Errorf("generating a new root certificate at %s", _config.rootCert))
 
-	key := chrootdir(_config.root_key)
-	p := chrootdir(_config.root_cert)
+	key := chrootdir(_config.rootKey)
+	p := chrootdir(_config.rootCert)
 
 	fp, err := os.Open(key)
 	data, err := ioutil.ReadAll(fp)
@@ -372,15 +372,11 @@ func makeRootCert() {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			CommonName: "dnsblock root",
+			CommonName:   "dnsblock root",
 			Organization: []string{"dnsblock root"},
 		},
-		NotBefore: time.Now().Add(-24 * time.Hour),
-		NotAfter:  time.Now().Add(24 * time.Hour * 365 * 10),
-		//DNSNames:  []string{"code.arp242.net"},
-
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		NotBefore:             time.Now().Add(-24 * time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour * 365 * 10),
 		BasicConstraintsValid: true,
 		IsCA: true,
 	}
@@ -392,8 +388,19 @@ func makeRootCert() {
 
 	pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
 	fp.Close()
-	
+
 	fatal(os.Chmod(p, os.FileMode(0600)))
+}
+
+// Install in system
+//
+// http://kb.kerio.com/product/kerio-connect/server-configuration/ssl-certificates/adding-trusted-root-certificates-to-the-server-1605.html
+//
+// update-ca-trust force-enable
+// ln -s /var/dnsblock/rootCA.pem /etc/ca-certificates/trust-source/anchors/
+// update-ca-trust extract
+//
+func installRootCert() {
 }
 
 // The MIT License (MIT)

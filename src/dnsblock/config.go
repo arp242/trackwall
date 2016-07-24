@@ -21,21 +21,21 @@ import (
 )
 
 // Most of config (except for the sources).
-type config_t struct {
-	control_listen addr_t
-	dns_listen     addr_t
-	dns_forward    addr_t
-	http_listen    addr_t
-	https_listen   addr_t
-	root_cert      string
-	root_key       string
-	user           user_t
-	chroot         string
-	cache_hosts    int
-	cache_dns      int
-	color bool
+type configT struct {
+	controlListen addrT
+	dnsListen     addrT
+	dnsForward    addrT
+	httpListen    addrT
+	httpsListen   addrT
+	rootCert      string
+	rootKey       string
+	user          userT
+	chroot        string
+	cacheHosts    int
+	cacheDNS      int
+	color         bool
 
-	sources sources_t
+	sources sourcesT
 
 	// Lock the config file when loading/reloading. None of the global _*
 	// variables (_config, _hosts, etc.) should be accessed when this is true
@@ -44,20 +44,20 @@ type config_t struct {
 }
 
 // Parse the config file.
-func (c *config_t) parse(file string, toplevel bool) {
+func (c *configT) parse(file string, toplevel bool) {
 	info(fmt.Sprintf("reading configuration from %v", file))
 	c.locked = true
 
 	fp, err := os.Open(file)
 	fatal(err)
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 
 	scanner := bufio.NewScanner(fp)
 	lines := []string{}
 	i := 0
 	for scanner.Scan() {
 		line := scanner.Text()
-		is_indented := len(line) > 0 && unicode.IsSpace(rune(line[0]))
+		isIndented := len(line) > 0 && unicode.IsSpace(rune(line[0]))
 		line = strings.TrimSpace(line)
 
 		if line == "" || line[0] == '#' {
@@ -69,17 +69,17 @@ func (c *config_t) parse(file string, toplevel bool) {
 			line = line[cmt:]
 		}
 
-		if is_indented {
+		if isIndented {
 			lines[i-1] += " " + line
 		} else {
 			lines = append(lines, line)
-			i += 1
+			i++
 		}
 	}
 
 	one := func(a []string) string {
 		if len(a) < 2 || len(a) > 2 {
-			fatal(fmt.Errorf("the %s option takes exactly one value (%v given).", a[0], len(a)-1))
+			fatal(fmt.Errorf("the %s option takes exactly one value (%v given)", a[0], len(a)-1))
 		}
 
 		return a[1]
@@ -105,29 +105,29 @@ func (c *config_t) parse(file string, toplevel bool) {
 		switch splitline[0] {
 		// Options
 		case "control-listen":
-			c.control_listen.set(one(splitline))
+			c.controlListen.set(one(splitline))
 		case "dns-listen":
-			c.dns_listen.set(one(splitline))
+			c.dnsListen.set(one(splitline))
 		case "dns-forward":
 			fwd = one(splitline)
 		case "http-listen":
-			c.http_listen.set(one(splitline))
+			c.httpListen.set(one(splitline))
 		case "https-listen":
-			c.https_listen.set(one(splitline))
+			c.httpsListen.set(one(splitline))
 		case "root-cert":
-			c.root_cert = one(splitline)
+			c.rootCert = one(splitline)
 		case "root-key":
-			c.root_key = one(splitline)
+			c.rootKey = one(splitline)
 		case "user":
 			c.user.set(one(splitline))
 		case "chroot":
 			c.chroot, err = realpath(one(splitline))
 			fatal(err)
 		case "cache-hosts":
-			c.cache_hosts, err = durationToSeconds(one(splitline))
+			c.cacheHosts, err = durationToSeconds(one(splitline))
 			fatal(err)
 		case "cache-dns":
-			c.cache_dns, err = durationToSeconds(one(splitline))
+			c.cacheDNS, err = durationToSeconds(one(splitline))
 			fatal(err)
 		case "color":
 			c.color = false
@@ -188,7 +188,7 @@ func (c *config_t) parse(file string, toplevel bool) {
 			info("dns-forward auto found: " + fwd)
 			fatal(err)
 		}
-		c.dns_forward.set(fwd)
+		c.dnsForward.set(fwd)
 	}
 }
 
@@ -202,7 +202,7 @@ func findResolver() (string, error) {
 		if !strings.HasPrefix(line, "nameserver") {
 			continue
 		}
-		if strings.HasSuffix(line, _config.dns_listen.host) {
+		if strings.HasSuffix(line, _config.dnsListen.host) {
 			continue
 		}
 
@@ -213,18 +213,18 @@ func findResolver() (string, error) {
 }
 
 // An IP or hostname
-type addr_t struct {
+type addrT struct {
 	host string
 	port int
 }
 
 // Get it as a string: host:port
-func (a addr_t) String() string {
+func (a addrT) String() string {
 	return fmt.Sprintf("%v:%v", a.host, a.port)
 }
 
 // Set it from a host:port string.
-func (a *addr_t) set(addr string) {
+func (a *addrT) set(addr string) {
 	// TODO: Not ipv6 safe
 	if strings.Index(addr, ":") < 0 {
 		addr += ":53"
@@ -238,7 +238,7 @@ func (a *addr_t) set(addr string) {
 }
 
 // A system user
-type user_t struct {
+type userT struct {
 	user.User
 
 	// the user.User.{Uid,Gid} are strings, not ints :-/
@@ -247,7 +247,7 @@ type user_t struct {
 }
 
 // Set it from a username.
-func (u *user_t) set(username string) {
+func (u *userT) set(username string) {
 	user, err := user.Lookup(username)
 	fatal(err)
 	u.User = *user
@@ -260,7 +260,7 @@ func (u *user_t) set(username string) {
 }
 
 // A list of the various sources
-type sources_t struct {
+type sourcesT struct {
 	hostlists     [][]string
 	unhostlists   [][]string
 	regexplists   [][]string
@@ -275,7 +275,7 @@ type sources_t struct {
 }
 
 // Check if name is in any of the *lists
-func (sources *sources_t) hasDomain(name string) bool {
+func (s *sourcesT) hasDomain(name string) bool {
 	check := func(arr [][]string) bool {
 		for _, v := range arr {
 			purl, _ := urlParser.Parse(v[1])
@@ -286,66 +286,66 @@ func (sources *sources_t) hasDomain(name string) bool {
 		return false
 	}
 
-	return check(sources.hostlists) || check(sources.unhostlists) ||
-		check(sources.regexplists) || check(sources.unregexplists)
+	return check(s.hostlists) || check(s.unhostlists) ||
+		check(s.regexplists) || check(s.unregexplists)
 }
 
 // Read the hosts information *after* starting the DNS server because we can add
 // hosts from remote sources (and thus needs DNS)
-func (sources *sources_t) read() {
+func (s *sourcesT) read() {
 	stat, err := os.Stat("/cache/compiled")
 
 	if err == nil {
-		expires := stat.ModTime().Add(time.Duration(_config.cache_hosts) * time.Second)
+		expires := stat.ModTime().Add(time.Duration(_config.cacheHosts) * time.Second)
 		if time.Now().Unix() > expires.Unix() {
 			warn(fmt.Errorf("the compiled list has expired, not using it"))
 		} else {
 			info("using the compiled list")
 			fp, err := os.Open("/cache/compiled")
 			fatal(err)
-			defer fp.Close()
+			defer func() { _ = fp.Close() }()
 
 			scanner := bufio.NewScanner(fp)
 			for scanner.Scan() {
-				sources.addHost(scanner.Text())
+				s.addHost(scanner.Text())
 			}
 			return
 		}
 	}
 
-	for _, v := range sources.hostlists {
-		sources.loadList(v[0], v[1], sources.addHost)
+	for _, v := range s.hostlists {
+		s.loadList(v[0], v[1], s.addHost)
 	}
-	for _, v := range sources.unhostlists {
-		sources.loadList(v[0], v[1], sources.removeHost)
+	for _, v := range s.unhostlists {
+		s.loadList(v[0], v[1], s.removeHost)
 	}
-	for _, v := range sources.regexplists {
-		sources.loadList(v[0], v[1], sources.addRegexp)
+	for _, v := range s.regexplists {
+		s.loadList(v[0], v[1], s.addRegexp)
 	}
-	for _, v := range sources.unregexplists {
-		sources.loadList(v[0], v[1], sources.removeRegexp)
-	}
-
-	for _, v := range sources.hosts {
-		sources.addHost(v)
-	}
-	for _, v := range sources.unhosts {
-		sources.removeHost(v)
-	}
-	for _, v := range sources.regexps {
-		sources.addRegexp(v)
-	}
-	for _, v := range sources.unregexps {
-		sources.removeRegexp(v)
+	for _, v := range s.unregexplists {
+		s.loadList(v[0], v[1], s.removeRegexp)
 	}
 
-	for _, v := range sources.surrogates {
-		sources.compileSurrogate(v[0], v[1])
+	for _, v := range s.hosts {
+		s.addHost(v)
+	}
+	for _, v := range s.unhosts {
+		s.removeHost(v)
+	}
+	for _, v := range s.regexps {
+		s.addRegexp(v)
+	}
+	for _, v := range s.unregexps {
+		s.removeRegexp(v)
+	}
+
+	for _, v := range s.surrogates {
+		s.compileSurrogate(v[0], v[1])
 	}
 }
 
 // Add host to _hosts
-func (s *sources_t) addHost(name string) {
+func (s *sourcesT) addHost(name string) {
 	// Remove www.
 	if strings.HasPrefix(name, "www.") {
 		name = strings.Replace(name, "www.", "", 1)
@@ -367,24 +367,24 @@ func (s *sources_t) addHost(name string) {
 
 // Compile all the sources in one file, saves some memory and makes lookups a
 // bit faster
-func (s *sources_t) compile() {
-	new_hosts := make(map[string]string)
+func (s *sourcesT) compile() {
+	newHosts := make(map[string]string)
 
 outer:
-	for name, _ := range _hosts {
+	for name := range _hosts {
 		labels := strings.Split(name, ".")
 
 		// This catches adding "s8.addthis.com" while "addthis.com" is in the list
 		c := ""
 		l := len(labels)
-		for i := 0; i < l; i += 1 {
+		for i := 0; i < l; i++ {
 			if c == "" {
 				c = labels[l-i-1]
 			} else {
 				c = labels[l-i-1] + "." + c
 			}
 
-			_, have := new_hosts[c]
+			_, have := newHosts[c]
 			if have {
 				continue outer
 			}
@@ -392,39 +392,40 @@ outer:
 
 		// This catches adding "addthis.com" while "s7.addthis.com" is in the list;
 		// in which case we want to remove the former.
-		for host, _ := range new_hosts {
+		for host := range newHosts {
 			if strings.HasSuffix(host, name) {
-				delete(new_hosts, name)
+				delete(newHosts, name)
 			}
 		}
 
-		new_hosts[name] = ""
+		newHosts[name] = ""
 	}
 
 	fp, err := os.Create("/cache/compiled")
 	fatal(err)
-	defer fp.Close()
-	for k, _ := range new_hosts {
-		fp.WriteString(fmt.Sprintf("%v\n", k))
+	defer func() { _ = fp.Close() }()
+	for k := range newHosts {
+		_, err = fp.WriteString(fmt.Sprintf("%v\n", k))
+		fatal(err)
 	}
 
-	fmt.Printf("Compiled %v hosts to %v entries\n", len(_hosts), len(new_hosts))
+	fmt.Printf("Compiled %v hosts to %v entries\n", len(_hosts), len(newHosts))
 }
 
 // Remove host from _hosts
-func (s *sources_t) removeHost(v string) {
+func (s *sourcesT) removeHost(v string) {
 	delete(_hosts, v)
 }
 
 // Add regexp to _regexpx
-func (s *sources_t) addRegexp(v string) {
+func (s *sourcesT) addRegexp(v string) {
 	c, err := regexp.Compile(v)
 	fatal(err)
 	_regexps = append(_regexps, c)
 }
 
 // Remove regexp to _regexpx
-func (s *sources_t) removeRegexp(v string) {
+func (s *sourcesT) removeRegexp(v string) {
 	for i, r := range _regexps {
 		if r.String() == v {
 			_regexps = append(_regexps[:i], _regexps[i+1:]...)
@@ -438,10 +439,10 @@ func (s *sources_t) removeRegexp(v string) {
 // allowed).
 // TODO: Allow loading remote config files in the dnsblock format (which only
 // parses host, hostlist, etc. and *not* dns-listen and such).
-func (s *sources_t) loadList(format string, url string, cb func(line string)) {
+func (s *sourcesT) loadList(format string, url string, cb func(line string)) {
 	fp, err := s.loadCachedURL(url)
 	fatal(err)
-	defer fp.Close()
+	defer func() { _ = fp.Close() }()
 	scanner := bufio.NewScanner(fp)
 
 	for scanner.Scan() {
@@ -476,14 +477,15 @@ func (s *sources_t) loadList(format string, url string, cb func(line string)) {
 }
 
 // Load URL with cache.
-func (s *sources_t) loadCachedURL(url string) (*os.File, error) {
+func (s *sourcesT) loadCachedURL(url string) (*os.File, error) {
 	// Load from filesystem
 	if strings.HasPrefix(url, "file://") {
 		return os.Open(url[7:])
 	}
 
 	// TODO: Check error (e.g. perm. denied)
-	os.MkdirAll("/cache/hosts", 0755)
+	err := os.MkdirAll("/cache/hosts", 0755)
+	fatal(err)
 	cachename := "/cache/hosts/" + regexp.MustCompile(`\W+`).ReplaceAllString(url, "-")
 
 	stat, err := os.Stat(cachename)
@@ -493,7 +495,7 @@ func (s *sources_t) loadCachedURL(url string) (*os.File, error) {
 
 	// Check if cache expires
 	if stat != nil {
-		expires := stat.ModTime().Add(time.Duration(_config.cache_hosts) * time.Second)
+		expires := stat.ModTime().Add(time.Duration(_config.cacheHosts) * time.Second)
 		if time.Now().Unix() > expires.Unix() {
 			stat = nil
 			os.Remove(cachename)
@@ -504,48 +506,50 @@ func (s *sources_t) loadCachedURL(url string) (*os.File, error) {
 	if stat == nil {
 		info("downloading " + url)
 		resp, err := http.Get(url)
+		if resp != nil {
+			defer resp.Body.Close()
+		}
 		fatal(err)
-		defer resp.Body.Close()
 
 		fp, err := os.Create(cachename)
 		fatal(err)
 		data, err := ioutil.ReadAll(resp.Body)
 		fp.Write(data)
-		fp.Close()
+		_ = fp.Close()
 	}
 
 	return os.Open(cachename)
 }
 
-type surrogate_t struct {
+type surrogateT struct {
 	*regexp.Regexp
 	script string
 }
 
 // "Compile" a surrogate into the config.hosts array. This uses a bit more memory,
 // but saves a lot of regexp checks later.
-func (s *sources_t) compileSurrogate(reg string, sur string) {
+func (s *sourcesT) compileSurrogate(reg string, sur string) {
 	sur = strings.Replace(sur, "@@", "function(){}", -1)
 	//info(fmt.Sprintf("compiling surrogate %s -> %s", reg, sur[:40]))
 
 	c, err := regexp.Compile(reg)
 
-	xx := surrogate_t{c, sur}
+	xx := surrogateT{c, sur}
 	_surrogates = append(_surrogates, xx)
 
 	fatal(err)
 
 	found := 0
-	for host, _ := range _hosts {
+	for host := range _hosts {
 		if c.MatchString(host) {
-			found += 1
+			found++
 			//info(fmt.Sprintf("  adding for %s", host))
 			_hosts[host] = sur
 		}
 	}
 
 	if found > 50 {
-		warn(fmt.Errorf("the surrogate %s matches %s hosts. Are you sure this is correct?",
+		warn(fmt.Errorf("the surrogate %s matches %d hosts. Are you sure this is correct?",
 			reg, found))
 	}
 }

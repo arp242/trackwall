@@ -100,5 +100,7 @@ host
 #info dns.go:68        forward  s6-pixel.c1exchange.com
 #
 
+# Facebook tracker
+host connect.facebook.net
 
 # vim:ft=config
