@@ -126,8 +126,12 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 		runtime.GC()
 		runtime.ReadMemStats(&stats)
 
+		_hostsLock.Lock()
 		fmt.Fprintf(w, "hosts:             %v\n", len(_hosts))
+		_hostsLock.Unlock()
+		_regexpsLock.Lock()
 		fmt.Fprintf(w, "regexps:           %v\n", len(_regexps))
+		_regexpsLock.Unlock()
 		fmt.Fprintf(w, "cache items:       %v\n", len(_cache))
 		fmt.Fprintf(w, "memory allocated:  %vKb\n", stats.Sys/1024)
 	case "config":
@@ -138,6 +142,7 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 		_cachelock.Unlock()
 	case "hosts":
 		fmt.Fprintf(w, fmt.Sprintf("# Blocking %v hosts\n", len(_hosts)))
+		_hostsLock.Lock()
 		for k, v := range _hosts {
 			if v != "" {
 				fmt.Fprintf(w, fmt.Sprintf("%v  # %v\n", k, v))
@@ -145,10 +150,13 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 				fmt.Fprintf(w, fmt.Sprintf("%v\n", k))
 			}
 		}
+		_hostsLock.Unlock()
 	case "regexps":
+		_regexpsLock.Lock()
 		for _, v := range _regexps {
 			fmt.Fprintf(w, fmt.Sprintf("%v\n", v))
 		}
+		_regexpsLock.Unlock()
 	case "override":
 		scs.Fdump(w, _overrideHosts)
 	default:

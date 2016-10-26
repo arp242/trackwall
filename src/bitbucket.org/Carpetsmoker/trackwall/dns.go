@@ -38,15 +38,7 @@ func listenDNS() (*dns.Server, *dns.Server) {
 func handleDNS(w dns.ResponseWriter, req *dns.Msg) {
 	name := strings.TrimRight(req.Question[0].Name, ".")
 
-	// Wait until _hosts are loaded, except when downloading the host lists
-	if !_config.hasDomain(name) {
-		for {
-			if !_config.Locked {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
+	// TODO: Wait until _hosts are loaded, except when downloading the host lists
 
 	if len(req.Question) == 0 {
 		dns.HandleFailed(w, req)
@@ -167,7 +159,9 @@ func determineResponse(name, t string) uint8 {
 				c = labels[l-i-1] + "." + c
 			}
 
+			_hostsLock.Lock()
 			_, doSpoof = _hosts[c]
+			_hostsLock.Unlock()
 			if doSpoof {
 				break
 			}
@@ -175,12 +169,14 @@ func determineResponse(name, t string) uint8 {
 
 		// Regexps
 		if !doSpoof {
+			_regexpsLock.Lock()
 			for _, r := range _regexps {
 				if r.MatchString(name) {
 					doSpoof = true
 					break
 				}
 			}
+			_regexpsLock.Unlock()
 		}
 	}
 

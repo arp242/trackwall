@@ -184,7 +184,9 @@ func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, h
 // Try to find a surrogate.
 func findSurrogate(host string) (script string, success bool) {
 	// Exact match! Hurray! This is fastest.
+	_hostsLock.Lock()
 	sur, exists := _hosts[host]
+	_hostsLock.Unlock()
 	if exists && sur != "" {
 		return sur, true
 	}

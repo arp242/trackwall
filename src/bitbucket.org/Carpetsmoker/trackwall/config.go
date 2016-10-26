@@ -49,11 +49,6 @@ type ConfigT struct {
 	Unregexps []string
 
 	Surrogates [][]string
-
-	// Lock the config file when loading/reloading. None of the global _*
-	// variables (_config, _hosts, etc.) should be accessed when this is true
-	// since not all data may be properly loaded.
-	Locked bool
 }
 
 // AddrT is an IP or hostname
@@ -257,10 +252,11 @@ func (s *ConfigT) addHost(name string) {
 	}
 
 	// We already got this
+	_hostsLock.Lock()
+	defer _hostsLock.Unlock()
 	if _, has := _hosts[name]; has {
 		return
 	}
-
 	_hosts[name] = ""
 }
 
@@ -268,6 +264,9 @@ func (s *ConfigT) addHost(name string) {
 // bit faster
 func (s *ConfigT) compile() {
 	newHosts := make(map[string]string)
+
+	_hostsLock.Lock()
+	defer _hostsLock.Unlock()
 
 outer:
 	for name := range _hosts {
@@ -313,18 +312,24 @@ outer:
 
 // Remove host from _hosts
 func (s *ConfigT) removeHost(v string) {
+	_hostsLock.Lock()
 	delete(_hosts, v)
+	_hostsLock.Unlock()
 }
 
 // Add regexp to _regexpx
 func (s *ConfigT) addRegexp(v string) {
 	c, err := regexp.Compile(v)
 	fatal(err)
+	_regexpsLock.Lock()
 	_regexps = append(_regexps, c)
+	_regexpsLock.Unlock()
 }
 
 // Remove regexp to _regexpx
 func (s *ConfigT) removeRegexp(v string) {
+	_regexpsLock.Lock()
+	defer _regexpsLock.Unlock()
 	for i, r := range _regexps {
 		if r.String() == v {
 			_regexps = append(_regexps[:i], _regexps[i+1:]...)
@@ -441,6 +446,8 @@ func (s *ConfigT) compileSurrogate(reg string, sur string) {
 	fatal(err)
 
 	found := 0
+	_hostsLock.Lock()
+	defer _hostsLock.Unlock()
 	for host := range _hosts {
 		if c.MatchString(host) {
 			found++

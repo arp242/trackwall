@@ -36,14 +36,16 @@ var (
 
 	// Static hosts added with hostlist/host. The key is the hostname, the
 	// (optional) value is a surrogate script to serve.
-	_hosts = make(map[string]string)
+	_hosts     = make(map[string]string)
+	_hostsLock sync.RWMutex
 
 	_surrogates     []surrogateT
 	_surrogatesLock sync.RWMutex
 
 	// Compiled regexes added with regexlist/regex. Pre-compiling the surrogate
 	// scripts isn't possible here.
-	_regexps []*regexp.Regexp
+	_regexps     []*regexp.Regexp
+	_regexpsLock sync.RWMutex
 
 	// Hosts to override; value is timestamp, once that's expired the entry will be
 	// removed from the list
@@ -159,7 +161,6 @@ func listen() {
 	// Read the hosts information *after* starting the DNS server because we can
 	// add hosts from remote sources (and thus needs DNS)
 	_config.readHosts()
-	_config.Locked = false
 
 	// Remove old cache items every 5 minutes.
 	startCachePurger()
