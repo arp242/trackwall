@@ -434,7 +434,9 @@ func (s *ConfigT) compileSurrogate(reg string, sur string) {
 	c, err := regexp.Compile(reg)
 
 	xx := surrogateT{c, sur}
+	_surrogatesLock.Lock()
 	_surrogates = append(_surrogates, xx)
+	_surrogatesLock.Unlock()
 
 	fatal(err)
 

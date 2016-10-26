@@ -38,7 +38,8 @@ var (
 	// (optional) value is a surrogate script to serve.
 	_hosts = make(map[string]string)
 
-	_surrogates []surrogateT
+	_surrogates     []surrogateT
+	_surrogatesLock sync.RWMutex
 
 	// Compiled regexes added with regexlist/regex. Pre-compiling the surrogate
 	// scripts isn't possible here.
