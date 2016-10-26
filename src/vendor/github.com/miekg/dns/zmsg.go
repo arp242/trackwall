@@ -801,7 +801,8 @@ func (rr *NSEC3) pack(msg []byte, off int, compression map[string]int, compress 
 	if err != nil {
 		return off, err
 	}
-	off, err = packStringHex(rr.Salt, msg, off)
+	if rr.Salt == "-" { /* do nothing, empty salt */
+	}
 	if err != nil {
 		return off, err
 	}
@@ -843,7 +844,8 @@ func (rr *NSEC3PARAM) pack(msg []byte, off int, compression map[string]int, comp
 	if err != nil {
 		return off, err
 	}
-	off, err = packStringHex(rr.Salt, msg, off)
+	if rr.Salt == "-" { /* do nothing, empty salt */
+	}
 	if err != nil {
 		return off, err
 	}
@@ -1076,6 +1078,32 @@ func (rr *SIG) pack(msg []byte, off int, compression map[string]int, compress bo
 		return off, err
 	}
 	off, err = packStringBase64(rr.Signature, msg, off)
+	if err != nil {
+		return off, err
+	}
+	rr.Header().Rdlength = uint16(off - headerEnd)
+	return off, nil
+}
+
+func (rr *SMIMEA) pack(msg []byte, off int, compression map[string]int, compress bool) (int, error) {
+	off, err := rr.Hdr.pack(msg, off, compression, compress)
+	if err != nil {
+		return off, err
+	}
+	headerEnd := off
+	off, err = packUint8(rr.Usage, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = packUint8(rr.Selector, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = packUint8(rr.MatchingType, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = packStringHex(rr.Certificate, msg, off)
 	if err != nil {
 		return off, err
 	}
@@ -2567,7 +2595,7 @@ func unpackNSEC3PARAM(h RR_Header, msg []byte, off int) (RR, int, error) {
 	if off == len(msg) {
 		return rr, off, nil
 	}
-	rr.Salt, off, err = unpackStringHex(msg, off, rdStart+int(rr.Hdr.Rdlength))
+	rr.Salt, off, err = unpackStringHex(msg, off, off+int(rr.SaltLength))
 	if err != nil {
 		return rr, off, err
 	}
@@ -2899,6 +2927,44 @@ func unpackSIG(h RR_Header, msg []byte, off int) (RR, int, error) {
 		return rr, off, nil
 	}
 	rr.Signature, off, err = unpackStringBase64(msg, off, rdStart+int(rr.Hdr.Rdlength))
+	if err != nil {
+		return rr, off, err
+	}
+	return rr, off, err
+}
+
+func unpackSMIMEA(h RR_Header, msg []byte, off int) (RR, int, error) {
+	rr := new(SMIMEA)
+	rr.Hdr = h
+	if noRdata(h) {
+		return rr, off, nil
+	}
+	var err error
+	rdStart := off
+	_ = rdStart
+
+	rr.Usage, off, err = unpackUint8(msg, off)
+	if err != nil {
+		return rr, off, err
+	}
+	if off == len(msg) {
+		return rr, off, nil
+	}
+	rr.Selector, off, err = unpackUint8(msg, off)
+	if err != nil {
+		return rr, off, err
+	}
+	if off == len(msg) {
+		return rr, off, nil
+	}
+	rr.MatchingType, off, err = unpackUint8(msg, off)
+	if err != nil {
+		return rr, off, err
+	}
+	if off == len(msg) {
+		return rr, off, nil
+	}
+	rr.Certificate, off, err = unpackStringHex(msg, off, rdStart+int(rr.Hdr.Rdlength))
 	if err != nil {
 		return rr, off, err
 	}
@@ -3445,6 +3511,7 @@ var typeToUnpack = map[uint16]func(RR_Header, []byte, int) (RR, int, error){
 	TypeRRSIG:      unpackRRSIG,
 	TypeRT:         unpackRT,
 	TypeSIG:        unpackSIG,
+	TypeSMIMEA:     unpackSMIMEA,
 	TypeSOA:        unpackSOA,
 	TypeSPF:        unpackSPF,
 	TypeSRV:        unpackSRV,
