@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/Carpetsmoker/sconfig"
+	"arp242.net/sconfig"
 )
 
 // ConfigT holds the config

@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"bitbucket.org/Carpetsmoker/sconfig"
+	"arp242.net/sconfig"
 )
 
 var _usage = map[string]string{
