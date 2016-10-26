@@ -7,6 +7,9 @@ etcdir="/etc"
 user=_trackwall
 name=trackwall
 
+go get -u arp242.net/trackwall
+go install arp242.net/trackwall
+
 echo "Installing $prefix/sbin/$name"
 out=trackwall
 install "$out" "$prefix/sbin/$name"

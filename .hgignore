@@ -1,9 +1,2 @@
 syntax: glob
 .nfs*
-
-syntax: regexp
-^trackwall
-^pkg
-^src/github.com/
-^src/golang.org/
-^config\.local
