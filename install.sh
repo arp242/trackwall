@@ -8,7 +8,7 @@ user=_dnsblock
 name=dnsblock
 
 echo "Installing $prefix/sbin/$name"
-out=dnsblock-$(uname -sm | tr '[[:upper:]] ' '[[:lower:]]-')
+out=dnsblock
 install "$out" "$prefix/sbin/$name"
 
 [ -e "$etcdir/$name" ] || mkdir -pv "$etcdir/$name"

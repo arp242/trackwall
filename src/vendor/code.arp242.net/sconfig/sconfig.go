@@ -1,4 +1,6 @@
-// Package sconfig is a simple and functional configuration file parser.
+// Package sconfig is a simple yet functional configuration file parser.
+//
+// See the README.markdown for an introduction.
 package sconfig
 
 import (
@@ -6,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -14,23 +15,37 @@ import (
 	"bitbucket.org/pkg/inflect"
 )
 
-// Debug makes this package print out debug statements to stderr
-var Debug = false
-
-// TypeHandlers can be used to handle types other than the basic builtin ones
+// TypeHandlers can be used to handle types other than the basic builtin ones;
+// it's also possible to override the default types. The key is the name of the
+// type.
 var TypeHandlers = make(map[string]TypeHandler)
 
 // TypeHandler takes the field to set and the value to set it to. It is expected
 // to return the value to set it to.
-type TypeHandler func(*reflect.Value, interface{}) interface{}
+type TypeHandler func(*reflect.Value, []string) interface{}
+
+// Handler functions can be used to run special code for a field. The function
+// takes the unprocessed line split by whitespace and with the option name
+// removed.
+type Handler func(line []string)
 
 // Handlers can be used to run special code for a field. The map key is the name
-// of the field in the struct. The function takes the unprocessed line split by
-// whitespace and with the option name removed.
-type Handlers map[string]func(line []string)
+// of the field in the struct.
+type Handlers map[string]Handler
 
 // readFile will read a file, strip comments, and collapse indents. This also
 // deals with the special "source" command.
+//
+// The return value is an array of arrays, where the first item is the original
+// line number and the second is the actual line; for example:
+//
+//     [][]string{
+//         []string{3, "key value"},
+//         []string{9, "key2 value1 value2"},
+//     }
+//
+// It expects the input file to be utf-8 encoded; other encodings are not
+// supported.
 func readFile(file string) (lines [][]string, err error) {
 	fp, err := os.Open(file)
 	if err != nil {
@@ -46,27 +61,16 @@ func readFile(file string) (lines [][]string, err error) {
 
 		isIndented := len(line) > 0 && unicode.IsSpace(rune(line[0]))
 		line = strings.TrimSpace(line)
-
 		if line == "" || line[0] == '#' {
 			continue
 		}
 
-		// Ignore comments
-		cmt := strings.Index(line, "#")
-		if cmt > -1 {
-			// Allow escaping # with \#
-			if line[cmt-1] == '\\' {
-				line = line[:cmt-1] + line[cmt:]
-			} else {
-				line = line[:cmt]
-			}
-		}
-
-		// Collapse whitespace
-		// TODO: Allow \  to prevent this
-		line = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(line, " "))
+		line = collapseWhitespace(removeComments(line))
 
 		if isIndented {
+			if i == 0 {
+				return lines, fmt.Errorf("first line can't be indented")
+			}
 			lines[i-1][1] += " " + line
 		} else {
 			// Source
@@ -86,212 +90,338 @@ func readFile(file string) (lines [][]string, err error) {
 	return lines, nil
 }
 
-// Parse a file.
-func Parse(c interface{}, file string, handlers map[string]func(line []string)) error {
+func removeComments(line string) string {
+	prevcmt := 0
+	for {
+		cmt := strings.Index(line[prevcmt:], "#")
+		if cmt < 0 {
+			break
+		}
+
+		cmt += prevcmt
+		prevcmt = cmt
+
+		// Allow escaping # with \#
+		if line[cmt-1] == '\\' {
+			line = line[:cmt-1] + line[cmt:]
+		} else {
+			// Found comment
+			line = line[:cmt]
+			break
+		}
+	}
+
+	return line
+}
+
+func collapseWhitespace(line string) string {
+	nl := ""
+	prevSpace := false
+	for i, char := range line {
+		switch {
+		case char == '\\':
+			// \ is escaped with \: "\\"
+			if line[i-1] == '\\' {
+				nl += `\`
+			}
+		case unicode.IsSpace(char):
+			if prevSpace {
+				// Escaped with \: "\ "
+				if line[i-1] == '\\' {
+					nl += string(char)
+				}
+			} else {
+				prevSpace = true
+				if i != len(line)-1 {
+					nl += " "
+				}
+			}
+		default:
+			nl += string(char)
+			prevSpace = false
+		}
+	}
+
+	return nl
+}
+
+// MustParse behaves like Parse, but panics if there is an error.
+func MustParse(c interface{}, file string, handlers Handlers) {
+	err := Parse(c, file, handlers)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// Parse will reads file from disk and populates the given config struct c.
+//
+// The Handlers map can be given to customize the the behaviour; the key is the
+// name of the config struct field, and the function is passed a slice with all
+// the values on the line.
+// There is no return value, the function is epected to set any settings on the
+// struct; for example:
+//
+//     MustParse(&config, "config", Handlers{
+//     	"Bool": func(line []string) {
+//     		if line[0] == "yup" {
+//     			config.Bool = true
+//     		}
+//     	},
+//     })
+//
+// TODO: Document more
+func Parse(c interface{}, file string, handlers Handlers) error {
 	lines, err := readFile(file)
 	if err != nil {
 		return err
 	}
 
 	values := reflect.ValueOf(c).Elem()
-	types := reflect.TypeOf(c).Elem()
+
+	// Get list of rule names from tags
 	for _, line := range lines {
+		// Record source file and line number for errors
 		src := file + ":" + line[0]
 
+		// Split by spaces
 		v := strings.Split(line[1], " ")
 
-		// Get the variable name
-		fieldName := inflect.Camelize(v[0])
-
-		// TODO: Maybe find better inflect package?
-		// This list is from golint
-		acr := []string{"Api", "Ascii", "Cpu", "Css", "Dns", "Eof", "Guid", "Html",
-			"Https", "Http", "Id", "Ip", "Json", "Lhs", "Qps", "Ram", "Rhs",
-			"Rpc", "Sla", "Smtp", "Sql", "Ssh", "Tcp", "Tls", "Ttl", "Udp",
-			"Ui", "Uid", "Uuid", "Uri", "Url", "Utf8", "Vm", "Xml", "Xsrf",
-			"Xss"}
-		for _, a := range acr {
-			fieldName = strings.Replace(fieldName, a, strings.ToUpper(a), -1)
+		// Infer the field name from the key
+		fieldName, err := fieldNameFromKey(v[0], src, values)
+		if err != nil {
+			return err
 		}
-
-		// TODO: Allow a tag to set the rule to match:
-		// Foobar string `rule:"foo-bar"`
-
-		// TODO: Also validate?
-		// Foobar string `required:"true" format:"%d""`
-
 		field := values.FieldByName(fieldName)
-		if !field.CanAddr() {
-			// Check plural version too
-			fieldName = inflect.Pluralize(fieldName)
-			field = values.FieldByName(fieldName)
 
-			if !field.CanAddr() {
-				return fmt.Errorf("%s: unknown option %s (field %s is missing)",
-					src, v[0], fieldName)
+		// Use the handler that was given
+		if handlers != nil {
+			handler, has := handlers[fieldName]
+			if has {
+				handler(v[1:])
+				continue
 			}
 		}
 
-		// Use handler
-		// TODO: We should be able to use sconfig.One() or some such so we get
-		// an error.
-		// Or maybe use a tag for this?
-		dbg(fieldName + strings.Repeat(" ", 15-len(fieldName)))
-		handler, has := handlers[fieldName]
-		if has {
-			// TODO: Better dbg
-			dbg("handler\t=> \n")
-			handler(v[1:])
-			continue
-		}
-
-		// Parse according to the tag
-		t, _ := types.FieldByName(fieldName)
-		tag := t.Tag.Get("sconfig")
-		if tag == "" {
-			tag = "all"
-		}
-
-		var value interface{}
-		switch tag {
-		case "one":
-			if len(v) < 2 || len(v) > 2 {
-				return fmt.Errorf("%s: the %s option takes exactly one value (%v given)",
-					src, v[0], len(v)-1)
-			}
-			value = v[1]
-		case "two":
-			if len(v) < 2 {
-				return fmt.Errorf("%s: the %s option takes at least one values (%v given)",
-					src, v[0], len(v)-1)
-			}
-			//value = v[1:]
-		case "three":
-			if len(v) < 3 {
-				return fmt.Errorf("%s: the %s option takes at least three values (%v given)",
-					src, v[0], len(v)-1)
-			}
-			//value = v[2:]
-		case "all":
-			value = strings.Join(v[1:], " ")
-		default:
-			return fmt.Errorf("%s: unknown type %s for %s", src, tag, fieldName)
-		}
-
-		err := setValue(&field, value)
-		dbg("\n")
+		err = setValue(&field, v[1:])
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func fieldNameFromKey(key, src string, values reflect.Value) (string, error) {
+	fieldName := inflect.Camelize(key)
+
+	// TODO: Maybe find better inflect package that deals with this already?
+	// This list is from golint
+	acr := []string{"Api", "Ascii", "Cpu", "Css", "Dns", "Eof", "Guid", "Html",
+		"Https", "Http", "Id", "Ip", "Json", "Lhs", "Qps", "Ram", "Rhs",
+		"Rpc", "Sla", "Smtp", "Sql", "Ssh", "Tcp", "Tls", "Ttl", "Udp",
+		"Ui", "Uid", "Uuid", "Uri", "Url", "Utf8", "Vm", "Xml", "Xsrf",
+		"Xss"}
+	for _, a := range acr {
+		fieldName = strings.Replace(fieldName, a, strings.ToUpper(a), -1)
+	}
+
+	field := values.FieldByName(fieldName)
+	if !field.CanAddr() {
+		// Check plural version too; we're not too fussy
+		fieldNamePlural := inflect.Pluralize(fieldName)
+		field = values.FieldByName(fieldNamePlural)
+		if !field.CanAddr() {
+			return "", fmt.Errorf("%s: unknown option %s (field %s or %s is missing)",
+				src, key, fieldName, fieldNamePlural)
+		}
+		fieldName = fieldNamePlural
+	}
+
+	return fieldName, nil
 }
 
 // setValue sets the struct field to the given value. The value will be
 // type-coerced in the field's type.
-func setValue(field *reflect.Value, value interface{}) error {
-	switch field.Interface().(type) {
+func setValue(field *reflect.Value, value []string) error {
+	// Try to get it from TypeHandlers first so we can override primitives
+	// if we want to.
+	if fun, has := TypeHandlers[field.Type().String()]; has {
+		v := fun(field, value)
+		field.Set(reflect.ValueOf(v))
+		return nil
+	}
+
+	iface := field.Interface()
+	switch iface.(type) {
 	// Primitives
 	case int, int8, int16, int32, int64:
-		i, err := strconv.ParseInt(value.(string), 10, 64)
+		bs := 32
+		switch iface.(type) {
+		case int8:
+			bs = 8
+		case int16:
+			bs = 16
+		case int64:
+			bs = 64
+		}
+		i, err := strconv.ParseInt(strings.Join(value, " "), 10, bs)
 		if err != nil {
 			return err
 		}
 		field.SetInt(i)
-		dbg("%s\t=> %#v", field.Type(), i)
 	case uint, uint8, uint16, uint32, uint64:
-		i, err := strconv.ParseUint(value.(string), 10, 64)
+		bs := 32
+		switch iface.(type) {
+		case uint8:
+			bs = 8
+		case uint16:
+			bs = 16
+		case uint64:
+			bs = 64
+		}
+		i, err := strconv.ParseUint(strings.Join(value, " "), 10, bs)
 		if err != nil {
 			return err
 		}
 		field.SetUint(i)
-		dbg("%s\t=> %#v", field.Type(), i)
 	case bool:
-		s := strings.ToLower(value.(string))
-		switch s {
-		case "true", "yes", "on", "enable", "enabled":
-			field.SetBool(true)
-			dbg("%s\t=> %#v", field.Type(), true)
-		case "false", "no", "off", "disable", "disabled":
-			field.SetBool(false)
-			dbg("%s\t=> %#v", field.Type(), false)
-		default:
-			return fmt.Errorf("unable to parse %s as a boolean", value)
+		b, err := parseBool(strings.Join(value, " "))
+		if err != nil {
+			return err
 		}
+		field.SetBool(b)
 	case float32, float64:
-		field.SetFloat(value.(float64))
-		dbg("%s\t=> %#v", field.Type(), value.(float64))
-	case string:
-		field.SetString(value.(string))
-		dbg("%s\t=> %#v", field.Type(), value.(string))
-
-	default:
-		str := field.Type().String()
-
-		// Try to get it from TypeHandlers
-		if fun, has := TypeHandlers[str]; has {
-			v := fun(field, value)
-			dbg("%s\t=> %#v", field.Type(), v)
-			field.Set(reflect.ValueOf(v))
-
-			return nil
+		bs := 32
+		switch iface.(type) {
+		case float64:
+			bs = 64
 		}
+		i, err := strconv.ParseFloat(strings.Join(value, " "), bs)
+		if err != nil {
+			return err
+		}
+		field.SetFloat(i)
+	case string:
+		field.SetString(strings.Join(value, " "))
 
-		// TODO: Make this go back to the code above
-		if strings.HasPrefix(str, "[]") {
-			switch field.Interface().(type) {
-			case []int, []int8, []int16, []int32, []int64:
-				i, err := strconv.ParseInt(value.(string), 10, 64)
+	// Arrays of primitives
+	// TODO: this code is a bit more verbose than I'd like...
+	case []int, []int8, []int16, []int32, []int64:
+		for _, v := range value {
+			switch iface.(type) {
+			case []int:
+				i, err := strconv.ParseInt(v, 10, 32)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(int(i))))
+			case []int8:
+				i, err := strconv.ParseInt(v, 10, 8)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(int8(i))))
+			case []int16:
+				i, err := strconv.ParseInt(v, 10, 16)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(int16(i))))
+			case []int32:
+				i, err := strconv.ParseInt(v, 10, 32)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(int32(i))))
+			case []int64:
+				i, err := strconv.ParseInt(v, 10, 64)
 				if err != nil {
 					return err
 				}
 				field.Set(reflect.Append(*field, reflect.ValueOf(i)))
-				dbg("%s\ta> %#v", field.Type(), i)
-			case []uint, []uint8, []uint16, []uint32, []uint64:
-				i, err := strconv.ParseUint(value.(string), 10, 64)
-				if err != nil {
-					return err
-				}
-				field.Set(reflect.Append(*field, reflect.ValueOf(i)))
-				dbg("%s\ta> %#v", field.Type(), i)
-			case []bool:
-				s := strings.ToLower(value.(string))
-				switch s {
-				case "true", "yes", "on", "enable", "enabled":
-					field.Set(reflect.Append(*field, reflect.ValueOf(true)))
-					dbg("%s\ta> %#v", field.Type(), true)
-				case "false", "no", "off", "disable", "disabled":
-					field.Set(reflect.Append(*field, reflect.ValueOf(false)))
-					dbg("%s\ta> %#v", field.Type(), false)
-				default:
-					return fmt.Errorf("unable to parse %s as a boolean", value)
-				}
-			case []float32, []float64:
-				field.Set(reflect.Append(*field, reflect.ValueOf(value.(float64))))
-				dbg("%s\ta> %#v", field.Type(), value.(float64))
-			case []string:
-				field.Set(reflect.Append(*field, reflect.ValueOf(value)))
-				dbg("%s\ta> %#v", field.Type(), value.(string))
-			default:
-				// TODO: If the value is a struct, check if it has this field
-
-				// Give up :-(
-				return fmt.Errorf("don't know how to set fields of the type %s", str)
-
 			}
 		}
+	case []uint, []uint8, []uint16, []uint32, []uint64:
+		for _, v := range value {
+			switch iface.(type) {
+			case []uint:
+				i, err := strconv.ParseUint(v, 10, 32)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(uint(i))))
+			case []uint8:
+				i, err := strconv.ParseUint(v, 10, 8)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(uint8(i))))
+			case []uint16:
+				i, err := strconv.ParseUint(v, 10, 16)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(uint16(i))))
+			case []uint32:
+				i, err := strconv.ParseUint(v, 10, 32)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(uint32(i))))
+			case []uint64:
+				i, err := strconv.ParseUint(v, 10, 64)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(i)))
+			}
+		}
+	case []bool:
+		for _, v := range value {
+			b, err := parseBool(v)
+			if err != nil {
+				return err
+			}
+			field.Set(reflect.Append(*field, reflect.ValueOf(b)))
+		}
+	case []float32, []float64:
+		for _, v := range value {
+			switch iface.(type) {
+			case []float32:
+				i, err := strconv.ParseFloat(v, 32)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(float32(i))))
+			case []float64:
+				i, err := strconv.ParseFloat(v, 64)
+				if err != nil {
+					return err
+				}
+				field.Set(reflect.Append(*field, reflect.ValueOf(i)))
+			}
+		}
+	case []string:
+		field.Set(reflect.ValueOf(value))
+
+	// Give up :-(
+	default:
+		return fmt.Errorf("don't know how to set fields of the type %s",
+			field.Type().String())
 	}
 
 	return nil
 }
 
-// dbg acts like fmt.Fprintf(os.Stderr, ...) if Debug is true.
-func dbg(format string, a ...interface{}) {
-	if !Debug {
-		return
+func parseBool(v string) (bool, error) {
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on", "enable", "enabled":
+		return true, nil
+	case "0", "false", "no", "off", "disable", "disabled":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unable to parse %s as a boolean", v)
 	}
-	fmt.Fprintf(os.Stderr, format, a...)
 }
 
 // FindConfig tries to find a config file at the usual locations (in this
@@ -303,9 +433,6 @@ func dbg(format string, a ...interface{}) {
 //   /usr/local/etc/$file
 //   /usr/pkg/etc/$file
 //   ./$file
-//
-//   c.FindConfig("mypackage/config")
-//
 func FindConfig(file string) string {
 	file = strings.TrimLeft(file, "/")
 

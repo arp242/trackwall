@@ -44,6 +44,8 @@ func dropPrivs() {
 	// way is to start a new process after the privileged initialisation and pass
 	// the filenos to that, but that would require reworking quite a bit of the DNS
 	// server bits in the dns package...
+	//
+	// setuidgid(8) should work
 	if runtime.GOOS == "linux" {
 		return
 	}

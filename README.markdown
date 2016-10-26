@@ -6,7 +6,7 @@ mortgage on your house.
 
 DNS proxy and filter.
 
-It's intended usage is to block third-party browser requests. It's not intended
+Its intended usage is to block third-party browser requests. It's not intended
 to "block advertisement" as such, rather it's intended to "block third party
 requests".
 
