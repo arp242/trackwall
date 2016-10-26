@@ -7,4 +7,5 @@ root="$(dirname "$(readlink -f "$0")")"
 export GO15VENDOREXPERIMENT=1
 export GOPATH="$root"
 
-go build code.arp242.net/dnsblock
+# -race doesn't work on all platforms
+go build -race bitbucket.org/Carpetsmoker/dnsblock || go build bitbucket.org/Carpetsmoker/dnsblock

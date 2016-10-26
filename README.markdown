@@ -42,7 +42,7 @@ Other POSIX systems should also work.
 
 You can download and build it with:
 
-	$ hg clone http://code.arp242.net/dnsblock
+	$ hg clone https://bitbucket.org/Carpetsmoker/dnsblock
 	$ cd dnsblock
 	$ ./build.sh
 	$ ./install.sh
