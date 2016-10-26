@@ -193,13 +193,13 @@ func findSurrogate(host string) (script string, success bool) {
 
 	// Slower check if a regex matches the domain
 	_surrogatesLock.Lock()
+	defer _surrogatesLock.Unlock()
 	for _, sur := range _surrogates {
 		//fmt.Println(host, sur)
 		if sur.MatchString(host) {
 			return sur.script, true
 		}
 	}
-	_surrogatesLock.Unlock()
 
 	return "", false
 }
