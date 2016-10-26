@@ -5,7 +5,7 @@
 # TODO: Why?!
 # info dns.go:67        forward  gy.symcd.com
 #
-# ./dnsblock status hosts|grep symcb
+# ./trackwall status hosts|grep symcb
 # symcb.com
 
 

@@ -4,11 +4,11 @@ set -euC
 
 prefix="/usr/local"
 etcdir="/etc"
-user=_dnsblock
-name=dnsblock
+user=_trackwall
+name=trackwall
 
 echo "Installing $prefix/sbin/$name"
-out=dnsblock
+out=trackwall
 install "$out" "$prefix/sbin/$name"
 
 [ -e "$etcdir/$name" ] || mkdir -pv "$etcdir/$name"
@@ -27,15 +27,15 @@ unsup() {
 }
 
 init_runit() {
-	mkdir -vp "$etcdir/sv/dnsblock/log" /var/log/dnsblock
-	chown -v "$user":"$user" /var/log/dnsblock
+	mkdir -vp "$etcdir/sv/trackwall/log" /var/log/trackwall
+	chown -v "$user":"$user" /var/log/trackwall
 
-	cp -v ./init/runit "$etcdir/sv/dnsblock/run"
-	chmod -v a+x "$etcdir/sv/dnsblock/run"
-	cp -v ./init/runit.log "$etcdir/sv/dnsblock/log/run"
-	chmod -v a+x "$etcdir/sv/dnsblock/log/run"
+	cp -v ./init/runit "$etcdir/sv/trackwall/run"
+	chmod -v a+x "$etcdir/sv/trackwall/run"
+	cp -v ./init/runit.log "$etcdir/sv/trackwall/log/run"
+	chmod -v a+x "$etcdir/sv/trackwall/log/run"
 
-	ln -fvs "$etcdir/sv/dnsblock" /var/service/
+	ln -fvs "$etcdir/sv/trackwall" /var/service/
 }
 
 init_systemd() {
@@ -47,7 +47,7 @@ init_systemd() {
 if [ "$uname" = "OpenBSD" ]; then
 	if ! grep "^$user" /etc/passwd; then
 		echo "Adding user $user"
-		useradd -d "/var/dnsblock" -s /sbin/nologin "$user"
+		useradd -d "/var/trackwall" -s /sbin/nologin "$user"
 	fi
 
 	echo "installing /etc/rc.d/$name"
@@ -55,9 +55,9 @@ if [ "$uname" = "OpenBSD" ]; then
 elif [ "$uname" = "Linux" ]; then
 	lsb=$(lsb_release -is 2>&1 || true)
 
-	if ! grep "^$user" /etc/passwd; then
+	if ! grep -q "^$user" /etc/passwd; then
 		echo "Adding user $user"
-		useradd "$user" -d /var/dnsblock -s /sbin/nologin
+		useradd "$user" -d /var/trackwall -s /sbin/nologin
 	fi
 
 	if [ "$lsb" = "VoidLinux" ]; then

@@ -1,9 +1,8 @@
 syntax: glob
 .nfs*
-dnsblock
 
 syntax: regexp
-^dnsblock-
+^trackwall
 ^pkg
 ^src/github.com/
 ^src/golang.org/

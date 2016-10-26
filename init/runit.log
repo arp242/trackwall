@@ -1,2 +1,2 @@
 #!/bin/sh
-exec chpst -u _dnsblock svlogd -tt /var/log/dnsblock
+exec chpst -u _trackwall svlogd -tt /var/log/trackwall

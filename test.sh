@@ -7,4 +7,4 @@ root="$(dirname "$(readlink -f "$0")")"
 set -x
 export GOPATH="$root"
 
-go test dnsblock
+go test trackwall

@@ -1,5 +1,5 @@
 [Unit]
-Description=dnsblock
+Description=trackwall
 Wants=local-fs.target network.target
 After=local-fs.target network.target
 
@@ -11,7 +11,7 @@ Type=simple
 User=root
 Group=root
 # Must be absolute...
-ExecStart=/usr/local/sbin/dnsblock server -v
+ExecStart=/usr/local/sbin/trackwall server -v
 KillMode=process
 Restart=on-success
 PrivateTmp=true

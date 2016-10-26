@@ -6,20 +6,20 @@
 # one or more spaces or tabs (the amount don't matter). So this:
 #
 # user
-#   _dnsblock
+#   _trackwall
 #
 # is the same as:
 #
-# user _dnsblock
+# user _trackwall
 #
 # Note that option keys *must not* have leading whitespace, this:
 #
-# user _dnsblock
-#  chroot /var/dnsblock
+# user _trackwall
+#  chroot /var/trackwall
 #
 # is seen as:
 #
-# user _dnsblock chroot /var/dnsblock
+# user _trackwall chroot /var/trackwall
 #
 # Which is an error, since the user option takes only one argument.
 #
@@ -51,12 +51,12 @@ root-cert /rootCA.pem
 root-key /rootCA.key
 
 # Run as this user
-user _dnsblock
+user _trackwall
 
 # Chroot directory
-chroot /var/dnsblock
+chroot /var/trackwall
 
-# Cache DNS responses. Note that dnsblock does *not* cache the actual DNS
+# Cache DNS responses. Note that trackwall does *not* cache the actual DNS
 # responses (that's the resolver's job), it merly caches whatever action is
 # taken (forward or spoof).
 cache-dns 1h
@@ -103,7 +103,7 @@ hostlist plain http://pgl.yoyo.org/adservers/serverlist.php?hostformat=plain&sho
 hostlist hosts http://winhelp2002.mvps.org/hosts.txt
 hostlist hosts http://someonewhocares.org/hosts/hosts
 
-# You can also use a local file; remember that dnsblock uses chroot()!
+# You can also use a local file; remember that trackwall uses chroot()!
 #hostlist hosts file:///hosts
 
 # If you just want to block a few hosts, you can add rules here as well
@@ -164,7 +164,7 @@ unhost grokbase.com
 # Some sites will break when they can't load some JavaScript. It'll error out
 # and none of the JavaScript works (which in some cases means the entire site
 # stops working).
-# To fix this, dnsblock can serve surrogate scripts, the format is simple:
+# To fix this, trackwall can serve surrogate scripts, the format is simple:
 #
 #   surrogate domain_regex JavaScript to serve
 #
@@ -193,7 +193,7 @@ surrogate .*googletag(manager|services)\.com$
 ### Add your own config ###
 ###########################
 
-source /etc/dnsblock/config.added
-#source /etc/dnsblock/config.local
+source /etc/trackwall/config.added
+#source /etc/trackwall/config.local
 
 # vim:ft=config

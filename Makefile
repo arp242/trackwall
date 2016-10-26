@@ -7,5 +7,5 @@ install: build
 	./install.sh
 
 clean:
-	rm -vf dnsblock
+	rm -vf trackwall
 	rm -rvf pkg

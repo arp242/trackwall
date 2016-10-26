@@ -8,4 +8,4 @@ export GO15VENDOREXPERIMENT=1
 export GOPATH="$root"
 
 # -race doesn't work on all platforms
-go build -race bitbucket.org/Carpetsmoker/dnsblock || go build bitbucket.org/Carpetsmoker/dnsblock
+go build -race bitbucket.org/Carpetsmoker/trackwall || go build bitbucket.org/Carpetsmoker/trackwall
