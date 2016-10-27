@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	urlParser "net/url"
 	"os"
 	"os/user"
 	"reflect"
@@ -21,6 +20,11 @@ import (
 
 	"arp242.net/sconfig"
 )
+
+type surrogateT struct {
+	*regexp.Regexp
+	script string
+}
 
 // ConfigT holds the config
 type ConfigT struct {
@@ -49,139 +53,6 @@ type ConfigT struct {
 	Unregexps []string
 
 	Surrogates [][]string
-}
-
-// AddrT is an IP or hostname
-type AddrT struct {
-	Host string
-	Port int
-}
-
-// UserT is a system user
-type UserT struct {
-	user.User
-
-	// the user.User.{Uid,Gid} are strings, not ints :-/
-	UID int
-	GID int
-}
-
-// loadConfig will load a config file from path
-func loadConfig(path string) error {
-	sconfig.TypeHandlers["*regexp.Regexp"] = func(field *reflect.Value, v []string) interface{} {
-		return regexp.MustCompile(v[0])
-	}
-	sconfig.TypeHandlers["*main.AddrT"] = func(field *reflect.Value, v []string) interface{} {
-		a := &AddrT{}
-		a.set(v[0])
-		return a
-	}
-	sconfig.TypeHandlers["*main.UserT"] = func(field *reflect.Value, v []string) interface{} {
-		u := &UserT{}
-		//err := u.set(value.(string))
-		//if err != nil {
-		//	return u, false
-		//}
-		u.set(v[0])
-		return u
-	}
-
-	return sconfig.Parse(&_config, path, sconfig.Handlers{
-		// Handler for specific keys, rather than types
-		"CacheDNS": func(l []string) {
-			//c2.CacheDNS = durationToSeconds(one(splitline))
-			_config.CacheDNS, _ = durationToSeconds(l[0])
-			//fmt.Printf("handler -> %#v\n", config.CacheDNS)
-		},
-		"CacheHosts": func(l []string) {
-			//c2.CacheDNS = durationToSeconds(one(splitline))
-			_config.CacheHosts, _ = durationToSeconds(l[0])
-			//fmt.Printf("handler -> %#v\n", config.CacheHosts)
-		},
-		"Hostlists": func(l []string) {
-			// First is the type, after this 1+ urls
-			for _, v := range l[1:] {
-				_config.Hostlists = append(_config.Hostlists, []string{l[0], v})
-			}
-		},
-		"Unhostlists": func(l []string) {
-			// First is the type, after this 1+ urls
-			for _, v := range l[1:] {
-				_config.Unhostlists = append(_config.Unhostlists, []string{l[0], v})
-			}
-		},
-		"Hosts": func(l []string) {
-			for _, v := range l {
-				_config.Hosts = append(_config.Hosts, v)
-			}
-		},
-		"Unhosts": func(l []string) {
-			for _, v := range l {
-				_config.Unhosts = append(_config.Unhosts, v)
-			}
-		},
-		"Regexps": func(l []string) {
-			for _, v := range l {
-				_config.Regexps = append(_config.Regexps, v)
-			}
-		},
-		"Unregexps": func(l []string) {
-			for _, v := range l {
-				_config.Unregexps = append(_config.Unregexps, v)
-			}
-		},
-		"Surrogates": func(l []string) {
-			_config.Surrogates = append(_config.Surrogates, []string{l[0], strings.Join(l[1:], " ")})
-		},
-	})
-}
-
-// Get it as a string: host:port
-func (a *AddrT) String() string {
-	return fmt.Sprintf("%v:%v", a.Host, a.Port)
-}
-
-// Set it from a host:port string.
-func (a *AddrT) set(addr string) {
-	// TODO: Not ipv6 safe
-	if strings.Index(addr, ":") < 0 {
-		addr += ":53"
-	}
-
-	host, port, err := net.SplitHostPort(addr)
-	fatal(err)
-	a.Host = host
-	a.Port, err = strconv.Atoi(port)
-	fatal(err)
-}
-
-// Set it from a username.
-func (u *UserT) set(username string) {
-	user, err := user.Lookup(username)
-	fatal(err)
-	u.User = *user
-
-	u.UID, err = strconv.Atoi(user.Uid)
-	fatal(err)
-
-	u.GID, err = strconv.Atoi(user.Gid)
-	fatal(err)
-}
-
-// Check if name is in any of the *lists
-func (s *ConfigT) hasDomain(name string) bool {
-	check := func(arr [][]string) bool {
-		for _, v := range arr {
-			purl, _ := urlParser.Parse(v[1])
-			if purl.Host == name {
-				return true
-			}
-		}
-		return false
-	}
-
-	return check(s.Hostlists) || check(s.Unhostlists) ||
-		check(s.Regexplists) || check(s.Unregexplists)
 }
 
 // Read the hosts information *after* starting the DNS server because we can add
@@ -425,11 +296,6 @@ func (s *ConfigT) loadCachedURL(url string) (*os.File, error) {
 	return os.Open(cachename)
 }
 
-type surrogateT struct {
-	*regexp.Regexp
-	script string
-}
-
 // "Compile" a surrogate into the config.hosts array. This uses a bit more memory,
 // but saves a lot of regexp checks later.
 func (s *ConfigT) compileSurrogate(reg string, sur string) {
@@ -460,6 +326,122 @@ func (s *ConfigT) compileSurrogate(reg string, sur string) {
 		warn(fmt.Errorf("the surrogate %s matches %d hosts. Are you sure this is correct?",
 			reg, found))
 	}
+}
+
+// AddrT is an IP or hostname
+type AddrT struct {
+	Host string
+	Port int
+	IPv6 bool
+}
+
+// Get it as a string: host:port
+func (a *AddrT) String() string {
+	if a.IPv6 {
+		return fmt.Sprintf("[%v]:%v", a.Host, a.Port)
+	}
+	return fmt.Sprintf("%v:%v", a.Host, a.Port)
+}
+
+// Set it from a host:port string.
+func (a *AddrT) set(addr string) {
+	if addr[0] != '[' && strings.Count(addr, ":") > 1 {
+		addr = fmt.Sprintf("[%v]:53", addr)
+	} else if strings.Index(addr, ":") < 0 {
+		addr += ":53"
+	}
+
+	if addr[0] == '[' {
+		a.IPv6 = true
+	}
+
+	host, port, err := net.SplitHostPort(addr)
+	fatal(err)
+	a.Host = host
+	a.Port, err = strconv.Atoi(port)
+	fatal(err)
+}
+
+// UserT is a system user
+type UserT struct {
+	user.User
+
+	// the user.User.{Uid,Gid} are strings, not ints :-/
+	UID int
+	GID int
+}
+
+// Set it from a username.
+func (u *UserT) set(username string) {
+	user, err := user.Lookup(username)
+	fatal(err)
+	u.User = *user
+
+	u.UID, err = strconv.Atoi(user.Uid)
+	fatal(err)
+
+	u.GID, err = strconv.Atoi(user.Gid)
+	fatal(err)
+}
+
+// loadConfig will load a config file from path
+func loadConfig(path string) error {
+	sconfig.TypeHandlers["*regexp.Regexp"] = func(field *reflect.Value, v []string) interface{} {
+		return regexp.MustCompile(v[0])
+	}
+	sconfig.TypeHandlers["*main.AddrT"] = func(field *reflect.Value, v []string) interface{} {
+		a := &AddrT{}
+		a.set(v[0])
+		return a
+	}
+	sconfig.TypeHandlers["*main.UserT"] = func(field *reflect.Value, v []string) interface{} {
+		u := &UserT{}
+		u.set(v[0])
+		return u
+	}
+
+	return sconfig.Parse(&_config, path, sconfig.Handlers{
+		// Handler for specific keys, rather than types
+		"CacheDNS": func(l []string) {
+			_config.CacheDNS, _ = durationToSeconds(l[0])
+		},
+		"CacheHosts": func(l []string) {
+			_config.CacheHosts, _ = durationToSeconds(l[0])
+		},
+		"Hostlists": func(l []string) {
+			for _, v := range l[1:] {
+				_config.Hostlists = append(_config.Hostlists, []string{l[0], v})
+			}
+		},
+		"Unhostlists": func(l []string) {
+			for _, v := range l[1:] {
+				_config.Unhostlists = append(_config.Unhostlists, []string{l[0], v})
+			}
+		},
+		"Hosts": func(l []string) {
+			for _, v := range l {
+				_config.Hosts = append(_config.Hosts, v)
+			}
+		},
+		"Unhosts": func(l []string) {
+			for _, v := range l {
+				_config.Unhosts = append(_config.Unhosts, v)
+			}
+		},
+		"Regexps": func(l []string) {
+			for _, v := range l {
+				_config.Regexps = append(_config.Regexps, v)
+			}
+		},
+		"Unregexps": func(l []string) {
+			for _, v := range l {
+				_config.Unregexps = append(_config.Unregexps, v)
+			}
+		},
+		"Surrogates": func(l []string) {
+			_config.Surrogates = append(_config.Surrogates, []string{l[0], strings.Join(l[1:], " ")})
+		},
+	})
 }
 
 func findResolver() (string, error) {

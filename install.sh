@@ -2,27 +2,39 @@
 
 set -euC
 
-prefix="/usr/local"
-etcdir="/etc"
+if [ $(id -u) -eq 0 ]; then
+	echo "Don't run this as root; we will ask for root permission with sudo when needed."
+	exit 1
+fi
+
+uname=$(uname)
+
+if [ "$uname" = "OpenBSD" ]; then
+	sudo=doas
+else
+	# TODO: Fall back to su if sudo doesn't exist
+	sudo=sudo
+fi
+
+prefix=/usr/local
+etcdir=/etc
 user=_trackwall
 name=trackwall
 
-go get -u arp242.net/trackwall
+#go get -u arp242.net/trackwall
 go install arp242.net/trackwall
 
 echo "Installing $prefix/sbin/$name"
-out=trackwall
-install "$out" "$prefix/sbin/$name"
+# TODO: re-exec after go install with sudo
+$sudo install "$GOPATH/bin/$name" "$prefix/sbin/$name"
 
 [ -e "$etcdir/$name" ] || mkdir -pv "$etcdir/$name"
 for f in config*; do
 	if [ ! -e "$etcdir/$name/$f" ]; then
 		echo "Installing $etcdir/$name/$f"
-		install -m 0644 "$f" "$etcdir/$name/$f"
+		sudo install -m 0644 "$f" "$etcdir/$name/$f"
 	fi
 done
-
-uname=$(uname)
 
 unsup() {
 	echo $1
@@ -42,8 +54,8 @@ init_runit() {
 }
 
 init_systemd() {
-	cp -v ./init/systemd.service "/etc/systemd/system/$name.service"
-	systemctl daemon-reload
+	$sudo cp -v ./init/systemd.service "/etc/systemd/system/$name.service"
+	$sudo systemctl daemon-reload
 }
 
 

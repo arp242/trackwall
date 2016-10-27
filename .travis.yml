@@ -1,0 +1,14 @@
+language: go
+go_import_path: arp242.net/trackwall
+go:
+  - 1.5
+  - 1.6
+  - 1.7
+  - master
+before_install:
+  - go get github.com/mattn/goveralls
+script:
+  - $HOME/gopath/bin/goveralls -service=travis-ci
+env:
+  global:
+    secure: XwqKVjk9urpR6AdMA8UsbafhWea20aaho2pOV4H71VTKA5GviQ8081uLKWd5VQDWbzNN7tlHfTbOn6j/CDCbfwJXKyfRJ/wJ0L1swnTyljEodry4WNbkPV445UZzayA51PAVHcBOWWcIoJ9JPX3f5EhJJbCGXLY3HhVKU3DOK9AjXKPQ5JdMoKI2cOUcH2vYYdwyOmxWNoR7zXHDfpA40QewGXBsF58bF7dpJXYJ+xaEIzv/rlyfuE+jckHLA6psvogMQCNGFGyFXlKgRaU9L5yEqfGgAofU0uod/bEgxdJISFc/6b6gE/r/yrOjEptADTwucdc7bzQ/488Dc8VV3A1zh0z7WH76Y+9TTn4HOgydoL7vClcN/hbxqy69pG/6OJjuoj7oAL/4/HIgASIeXp9FLgRVMRnA0RIlvCyTq6sDzDqoRU0LcZOJZSvmRQ7Ez6sEJQ4YsMuBBdIEmKr+2P/HoJQCavl5UwLLEdOcQ9iA32Tp7KhtiXlJdRu5+ZJaA5hD6WoHvIEzhw2/6ywWTmu4HvRxAG9mX9aXTTIegd/gd8lvaTeFS5XO7gu56NJ4++vmwDxcVV1orbnDywTZ7POS08YCvA4n1+HibFFrma4B6M3Gs6+arueuDg06sh+9Az+YONH/CPPZMkJoxt14bVgSg4yHCcpSA8UI0KCuo2U=
