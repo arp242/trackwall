@@ -57,10 +57,14 @@ func (ln httpListener) Accept() (c net.Conn, err error) {
 	if err != nil {
 		return
 	}
-	// TODO: Test if 2 seconds works well enough...
-	tc.SetKeepAlive(true)
-	//tc.SetKeepAlivePeriod(3 * time.Minute)
-	tc.SetKeepAlivePeriod(2 * time.Second)
+	err = tc.SetKeepAlive(true)
+	if err != nil {
+		return
+	}
+	err = tc.SetKeepAlivePeriod(2 * time.Second)
+	if err != nil {
+		return
+	}
 	return tc, nil
 }
 
@@ -212,7 +216,9 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	if name == "" {
 		return nil, fmt.Errorf("no ServerName")
 	}
-	os.MkdirAll("/cache/certs", 0700)
+	if err := os.MkdirAll("/cache/certs", 0700); err != nil {
+		return nil, err
+	}
 
 	// Make a key
 	// openssl genrsa -out s7.addthis.com.key 2048
@@ -229,8 +235,12 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return nil, err
 		}
 
-		pem.Encode(fp, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-		fp.Close()
+		err = pem.Encode(fp, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+		if err != nil {
+			return nil, err
+		}
+
+		_ = fp.Close()
 	}
 
 	// Make a csr

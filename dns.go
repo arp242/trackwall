@@ -229,7 +229,11 @@ func sendSpoof(answer []dns.RR, w dns.ResponseWriter, req *dns.Msg) {
 	msg.Ns = []dns.RR{}
 	msg.Extra = []dns.RR{}
 
-	w.WriteMsg(&msg)
+	err := w.WriteMsg(&msg)
+	if err != nil {
+		warn(fmt.Errorf("unable to spoof DNS request for %v: %v",
+			req.Question[0], err))
+	}
 }
 
 // Forward DNS request to forward-dns
@@ -272,7 +276,11 @@ func forward(addr string, w dns.ResponseWriter, req *dns.Msg) {
 		fmt.Println(resp)
 		fmt.Println("END END END")
 	}
-	w.WriteMsg(resp)
+	err = w.WriteMsg(resp)
+	if err != nil {
+		warn(fmt.Errorf("unable to write DNS request for %v to %v: %v",
+			req.Question[0], addr, err))
+	}
 }
 
 // The MIT License (MIT)

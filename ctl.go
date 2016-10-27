@@ -173,6 +173,7 @@ func writeCtl(what string) {
 
 	fmt.Fprintf(conn, what+"\n")
 	data, err := ioutil.ReadAll(conn)
+	fatal(err)
 	fmt.Println(strings.TrimSpace(string(data)))
 }
 

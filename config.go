@@ -265,7 +265,7 @@ func (s *ConfigT) loadCachedURL(url string) (*os.File, error) {
 
 	stat, err := os.Stat(cachename)
 	if err != nil && !os.IsNotExist(err) {
-		fatal(err)
+		return nil, err
 	}
 
 	// Check if cache expires
@@ -273,7 +273,10 @@ func (s *ConfigT) loadCachedURL(url string) (*os.File, error) {
 		expires := stat.ModTime().Add(time.Duration(_config.CacheHosts) * time.Second)
 		if time.Now().Unix() > expires.Unix() {
 			stat = nil
-			os.Remove(cachename)
+			err := os.Remove(cachename)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -281,15 +284,26 @@ func (s *ConfigT) loadCachedURL(url string) (*os.File, error) {
 	if stat == nil {
 		info("downloading " + url)
 		resp, err := http.Get(url)
-		if resp != nil {
-			defer resp.Body.Close()
+		if err != nil {
+			return nil, err
 		}
-		fatal(err)
+		defer func() { _ = resp.Body.Close() }()
 
 		fp, err := os.Create(cachename)
-		fatal(err)
+		if err != nil {
+			return nil, err
+		}
+
 		data, err := ioutil.ReadAll(resp.Body)
-		fp.Write(data)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = fp.Write(data)
+		if err != nil {
+			return nil, err
+		}
+
 		_ = fp.Close()
 	}
 
