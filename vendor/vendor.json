@@ -3,10 +3,10 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "HjtMlxSGLBAVokSsZf0Odw3ruf8=",
+			"checksumSHA1": "WILyfZzfkf8cnSA4hE1c1akh40c=",
 			"path": "arp242.net/sconfig",
-			"revision": "1922c0304473b7df2bcf299bcf054681e61f6bc4",
-			"revisionTime": "2017-03-25T13:50:02Z",
+			"revision": "30d68fa9cdfcc9964790d2b4c0498e6156a0d5d2",
+			"revisionTime": "2017-04-29T17:29:10Z",
 			"tree": true
 		},
 		{

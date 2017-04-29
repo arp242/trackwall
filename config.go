@@ -403,13 +403,13 @@ func loadConfig(path string) error {
 	// 	return regexp.MustCompile(v[0])
 	// }
 	//
-	sconfig.RegisterType("*main.AddrT", sconfig.ValidateSingleValue,
+	sconfig.RegisterType("*main.AddrT", sconfig.ValidateSingleValue(),
 		func(v []string) (interface{}, error) {
 			a := &AddrT{}
 			a.set(v[0])
 			return a, nil
 		})
-	sconfig.RegisterType("*main.UserT", sconfig.ValidateSingleValue,
+	sconfig.RegisterType("*main.UserT", sconfig.ValidateSingleValue(),
 		func(v []string) (interface{}, error) {
 			u := &UserT{}
 			u.set(v[0])

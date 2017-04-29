@@ -1,23 +1,16 @@
 [![GoDoc](https://godoc.org/arp242.net/sconfig?status.svg)](https://godoc.org/arp242.net/sconfig)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Carpetsmoker/sconfig)](https://goreportcard.com/report/github.com/Carpetsmoker/sconfig)
 [![Build Status](https://travis-ci.org/Carpetsmoker/sconfig.svg?branch=master)](https://travis-ci.org/Carpetsmoker/sconfig)
-[![Coverage Status](https://coveralls.io/repos/github/Carpetsmoker/sconfig/badge.svg?branch=master)](https://coveralls.io/github/Carpetsmoker/sconfig?branch=master)
+[![codecov](https://codecov.io/gh/Carpetsmoker/sconfig/branch/master/graph/badge.svg)](https://codecov.io/gh/Carpetsmoker/sconfig)
 
 `sconfig` is a simple and functional configuration file parser for Go.
 
 Installing
 ==========
 
-	go get arp242.net/sconfig.1
+	go get arp242.net/sconfig
 
-sconfig uses semantic versioning; the above will use the latest 1.x tag.
-
-You can also use the latest master (`arp242.net/sconfig`) and vendor that,
-preferably with a vendoring tool to lock it to 1.x.
-
-It is *strongly* discouraged to use the latest master without a vendoring it, as
-the author reserves the right to increase the major version and introduce
-breakage as he sees fit.
+Go 1.5 and newer should work, but the test suite only runs with 1.7 and newer.
 
 What does it look like?
 =======================
@@ -150,8 +143,8 @@ you can do easily with your own type handler :-)
 Note that the size of `int` and `uint` are platform-dependent, so adding those
 may not be a good idea.
 
-I get a "don’t know how to set fields of the type ..." error if I try to use `sconfig.TypeHandlers`
----------------------------------------------------------------------------------------------------
+I get a "don’t know how to set fields of the type ..." error if I try to add a new type handler
+-----------------------------------------------------------------------------------------------
 Include the package name; even if the type handler is in the same package. Do:
 
 	sconfig.RegisterType("[]main.RecordT", func(v []string) (interface{}, error) {
@@ -159,7 +152,6 @@ Include the package name; even if the type handler is in the same package. Do:
 
 and not:
 
-	sconfig.TypeHandlers["[]RecordT"] = func(v []string) (interface{}, error) {
 	sconfig.RegisterType("[]RecordT", func(v []string) (interface{}, error) {
 	}
 
