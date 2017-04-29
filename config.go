@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"os/user"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -37,8 +36,8 @@ type ConfigT struct {
 	RootKey       string
 	User          *UserT
 	Chroot        string
-	CacheHosts    int
-	CacheDNS      int
+	CacheHosts    int64
+	CacheDNS      int64
 	Color         bool
 
 	// A list of the various sources
@@ -244,7 +243,7 @@ func (s *ConfigT) loadList(format string, url string, cb func(line string)) {
 		} else if format == "plain" {
 			// Nothing needed
 		} else {
-			fatal(fmt.Errorf("unknown format: %v\n", format))
+			fatal(fmt.Errorf("unknown format: %v", format))
 		}
 
 		cb(line)
@@ -400,60 +399,71 @@ func (u *UserT) set(username string) {
 
 // loadConfig will load a config file from path
 func loadConfig(path string) error {
-	sconfig.TypeHandlers["*regexp.Regexp"] = func(field *reflect.Value, v []string) interface{} {
-		return regexp.MustCompile(v[0])
-	}
-	sconfig.TypeHandlers["*main.AddrT"] = func(field *reflect.Value, v []string) interface{} {
-		a := &AddrT{}
-		a.set(v[0])
-		return a
-	}
-	sconfig.TypeHandlers["*main.UserT"] = func(field *reflect.Value, v []string) interface{} {
-		u := &UserT{}
-		u.set(v[0])
-		return u
-	}
+	// sconfig.TypeHandlers["*regexp.Regexp"] = func(field *reflect.Value, v []string) interface{} {
+	// 	return regexp.MustCompile(v[0])
+	// }
+	//
+	sconfig.RegisterType("*main.AddrT", sconfig.ValidateSingleValue,
+		func(v []string) (interface{}, error) {
+			a := &AddrT{}
+			a.set(v[0])
+			return a, nil
+		})
+	sconfig.RegisterType("*main.UserT", sconfig.ValidateSingleValue,
+		func(v []string) (interface{}, error) {
+			u := &UserT{}
+			u.set(v[0])
+			return u, nil
+		})
 
 	return sconfig.Parse(&_config, path, sconfig.Handlers{
-		// Handler for specific keys, rather than types
-		"CacheDNS": func(l []string) {
+		"CacheDNS": func(l []string) error {
 			_config.CacheDNS, _ = durationToSeconds(l[0])
+			return nil
 		},
-		"CacheHosts": func(l []string) {
+		"CacheHosts": func(l []string) error {
 			_config.CacheHosts, _ = durationToSeconds(l[0])
+			return nil
 		},
-		"Hostlists": func(l []string) {
+		"Hostlists": func(l []string) error {
 			for _, v := range l[1:] {
 				_config.Hostlists = append(_config.Hostlists, []string{l[0], v})
 			}
+			return nil
 		},
-		"Unhostlists": func(l []string) {
+		"Unhostlists": func(l []string) error {
 			for _, v := range l[1:] {
 				_config.Unhostlists = append(_config.Unhostlists, []string{l[0], v})
 			}
+			return nil
 		},
-		"Hosts": func(l []string) {
+		"Hosts": func(l []string) error {
 			for _, v := range l {
 				_config.Hosts = append(_config.Hosts, v)
 			}
+			return nil
 		},
-		"Unhosts": func(l []string) {
+		"Unhosts": func(l []string) error {
 			for _, v := range l {
 				_config.Unhosts = append(_config.Unhosts, v)
 			}
+			return nil
 		},
-		"Regexps": func(l []string) {
+		"Regexps": func(l []string) error {
 			for _, v := range l {
 				_config.Regexps = append(_config.Regexps, v)
 			}
+			return nil
 		},
-		"Unregexps": func(l []string) {
+		"Unregexps": func(l []string) error {
 			for _, v := range l {
 				_config.Unregexps = append(_config.Unregexps, v)
 			}
+			return nil
 		},
-		"Surrogates": func(l []string) {
+		"Surrogates": func(l []string) error {
 			_config.Surrogates = append(_config.Surrogates, []string{l[0], strings.Join(l[1:], " ")})
+			return nil
 		},
 	})
 }

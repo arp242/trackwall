@@ -73,13 +73,14 @@ func dropPrivs() {
 //   w: weeks
 //   M: months (a month is 30.5 days)
 //   y: years (a year is always 365 days)
-func durationToSeconds(dur string) (int, error) {
+func durationToSeconds(dur string) (int64, error) {
 	last := dur[len(dur)-1]
 
 	// Last character is a number
 	_, err := strconv.Atoi(string(last))
 	if err == nil {
-		return strconv.Atoi(dur)
+		x, err := strconv.Atoi(dur)
+		return int64(x), err
 	}
 
 	var fact int
@@ -103,7 +104,7 @@ func durationToSeconds(dur string) (int, error) {
 	}
 
 	i, err := strconv.Atoi(dur[:len(dur)-1])
-	return i * fact, err
+	return int64(i * fact), err
 }
 
 // Remove old cache items every 5 minutes.

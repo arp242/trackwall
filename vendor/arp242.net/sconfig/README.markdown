@@ -1,10 +1,26 @@
-`sconfig` is a simple yet functional configuration file parser for Go.
+[![GoDoc](https://godoc.org/arp242.net/sconfig?status.svg)](https://godoc.org/arp242.net/sconfig)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Carpetsmoker/sconfig)](https://goreportcard.com/report/github.com/Carpetsmoker/sconfig)
+[![Build Status](https://travis-ci.org/Carpetsmoker/sconfig.svg?branch=master)](https://travis-ci.org/Carpetsmoker/sconfig)
+[![Coverage Status](https://coveralls.io/repos/github/Carpetsmoker/sconfig/badge.svg?branch=master)](https://coveralls.io/github/Carpetsmoker/sconfig?branch=master)
 
-[godoc](https://godoc.org/arp242.net/sconfig)
+`sconfig` is a simple and functional configuration file parser for Go.
+
+Installing
+==========
+
+	go get arp242.net/sconfig.1
+
+sconfig uses semantic versioning; the above will use the latest 1.x tag.
+
+You can also use the latest master (`arp242.net/sconfig`) and vendor that,
+preferably with a vendoring tool to lock it to 1.x.
+
+It is *strongly* discouraged to use the latest master without a vendoring it, as
+the author reserves the right to increase the major version and introduce
+breakage as he sees fit.
 
 What does it look like?
 =======================
-
 A file like this:
 
 	# This is a comment
@@ -21,9 +37,11 @@ A file like this:
 	# Two values
 	order allow deny
 
-	host  # Multiline stuff
+	host  # Idented lines are collapsed
 		arp242.net         # My website
 		stackoverflow.com  # I like this too
+
+	address arp242.net
 
 Can be parsed with:
 
@@ -34,27 +52,35 @@ Can be parsed with:
 		"os"
 
 		"arp242.net/sconfig"
+
+		// Types that need imports are in handlers/pkgname
+		_ "arp242.net/sconfig/handlers/regexp"
 	)
 
 	type Config struct {
-		Port    int
+		Port    int64
 		BaseURL string
 		Match   []*regexp.Regexp
 		Order   []string
 		Hosts   []string
+		Address string
 	}
 
 	func main() {
 		config := Config{}
-		sconfig.TypeHandlers["[]*regexp.Regexp"] = func(field *reflect.Value, v []string) interface{} {
-			r := []*regexp.Regexp{}
-			for _, s := range v {
-				r = append(r, regexp.MustCompile(s))
-			}
-			return r
-		}
+		err := sconfig.Parse(&config, "config", sconfig.Handlers{
+			// Custom handler
+			"address": func(line []string) error {
+				addr, err := net.LookupHost(line[0])
+				if err != nil {
+					return err
+				}
 
-		err := sconfig.Parse(&config, "config", nil)
+				config.Address = addr[0]
+				return nil
+			},
+		})
+
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing config: %v", err)
 		}
@@ -94,7 +120,8 @@ How do I...
 ===========
 
 Validate fields?
----------------
+----------------
+TODO: Mention chainable handlers here.
 There is no built-in way to do this. You can use `if` statements :-)
 
 Maybe I'll add this at a later date, an early (unreleased) version actually had
@@ -112,7 +139,31 @@ Set default values?
 Just set them before parsing:
 
 	c := MyConfig{Value: "The default"}
-	sconfig.Parse("a-file", &c, sconfig.Handlers{})
+	sconfig.Parse(&c, "a-file", sconfig.Handlers{})
+
+Use `int` types? I get an error?
+--------------------------------
+Only `int64` and `uint64` are handled by default; this should be fine for almost
+all use cases of this package. If you want to add any of the other (u)int types
+you can do easily with your own type handler :-)
+
+Note that the size of `int` and `uint` are platform-dependent, so adding those
+may not be a good idea.
+
+I get a "don’t know how to set fields of the type ..." error if I try to use `sconfig.TypeHandlers`
+---------------------------------------------------------------------------------------------------
+Include the package name; even if the type handler is in the same package. Do:
+
+	sconfig.RegisterType("[]main.RecordT", func(v []string) (interface{}, error) {
+	}
+
+and not:
+
+	sconfig.TypeHandlers["[]RecordT"] = func(v []string) (interface{}, error) {
+	sconfig.RegisterType("[]RecordT", func(v []string) (interface{}, error) {
+	}
+
+Replace `main` with the appropriate package name.
 
 
 Syntax
@@ -126,7 +177,7 @@ The syntax of the file is very simple.
 - Backslash: `\` character (U+005C).
 - Space: ` ` character (U+0020).
 - NULL byte: U+0000.
-- Newline LF (U+000A) or CR+LF (U+000D, U+000A).
+- Newline: LF (U+000A) or CR+LF (U+000D, U+000A).
 - Line: Any set of characters ended by a Newline
 
 ### Reading the file
@@ -159,7 +210,8 @@ The syntax of the file is very simple.
 
 Programs using it
 =================
-- [trackwall][trackwall]
+- [trackwall](https://arp242.net/code/trackwall)
+- [transip-dynamic](https://arp242.net/code/transip-dynamic)
 
 Alternatives
 ============
@@ -169,4 +221,3 @@ Aside from those mentioned in the "But why not..." section above:
 
 [json-no]: http://arp242.net/weblog/JSON_as_configuration_files-_please_dont.html
 [yaml-meh]: http://arp242.net/weblog/yaml_probably_not_so_great_after_all.html
-[trackwall]: http://code.arp242.net/trackwall

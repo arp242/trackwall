@@ -1,0 +1,28 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "HjtMlxSGLBAVokSsZf0Odw3ruf8=",
+			"path": "arp242.net/sconfig",
+			"revision": "1922c0304473b7df2bcf299bcf054681e61f6bc4",
+			"revisionTime": "2017-03-25T13:50:02Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "dvabztWVQX8f6oMLRyv4dLH+TGY=",
+			"path": "github.com/davecgh/go-spew/spew",
+			"revision": "346938d642f2ec3594ed81d874461961cd0faa76",
+			"revisionTime": "2016-10-29T20:57:26Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "siWJbWbI21Nv+yQ0IjSl1o+DwJ4=",
+			"path": "github.com/miekg/dns",
+			"revision": "113c7538ea6d8f429071f901bd26af59cc9676fe",
+			"revisionTime": "2017-04-26T17:46:52Z",
+			"tree": true
+		}
+	],
+	"rootPath": "arp242.net/trackwall"
+}
