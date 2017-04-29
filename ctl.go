@@ -1,4 +1,4 @@
-// Copyright © 2016 Martin Tournoij <martin@arp242.net>
+// Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
 package main
@@ -184,7 +184,7 @@ func writeCtl(what string) {
 
 // The MIT License (MIT)
 //
-// Copyright © 2016 Martin Tournoij
+// Copyright © 2016-2017 Martin Tournoij
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to

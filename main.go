@@ -1,7 +1,7 @@
-// Copyright © 2016 Martin Tournoij <martin@arp242.net>
+// Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-// DNS proxy which can spoof responses to block ads and malicious websites.
+// DNS proxy to spoof responses in order to block ads and malicious websites.
 package main
 
 import (
@@ -237,7 +237,7 @@ func chroot() {
 
 // The MIT License (MIT)
 //
-// Copyright © 2016 Martin Tournoij
+// Copyright © 2016-2017 Martin Tournoij
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
