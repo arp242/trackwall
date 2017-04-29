@@ -1,9 +1,8 @@
 // Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-package main
-
-// The DNS stuff
+// Package srvdns handles all the DNS stuff.
+package srvdns
 
 import (
 	"fmt"
@@ -11,66 +10,90 @@ import (
 	"strings"
 	"time"
 
+	"arp242.net/trackwall/cfg"
+	"arp242.net/trackwall/msg"
+
 	"github.com/miekg/dns"
 )
 
-// Setup DNS server
+const (
+	reponseForward = 1
+	reponseSpoof   = 2
+	reponseEmpty   = 3
+)
+
+// From config
+var (
+	dnsForward string
+	dnsCache   int64
+	httpAddr   string
+	verbose    bool
+)
+
+// Serve DNS requests.
+//
 // TODO: Splitting out the binding of the socket and starting a server is not
-// easy, so we don't...
-func listenDNS() (*dns.Server, *dns.Server) {
+// easy with the dns API, so we don't for now.
+func Serve(addr string, fwd string, cache int64, http string, v bool) (*dns.Server, *dns.Server) {
+	dnsForward = fwd
+	dnsCache = cache
+	httpAddr = http
+	verbose = v
 	dns.HandleFunc(".", handleDNS)
 
-	dnsUDP := &dns.Server{Addr: _config.DNSListen.String(), Net: "udp"}
+	dnsUDP := &dns.Server{Addr: addr, Net: "udp"}
 	go func() {
 		err := dnsUDP.ListenAndServe()
-		fatal(err)
+		msg.Fatal(err)
 	}()
 
-	dnsTCP := &dns.Server{Addr: _config.DNSListen.String(), Net: "tcp"}
+	dnsTCP := &dns.Server{Addr: addr, Net: "tcp"}
 	go func() {
 		err := dnsTCP.ListenAndServe()
-		fatal(err)
+		msg.Fatal(err)
+	}()
+
+	// Remove old cache items every 5 minutes.
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+			Cache.PurgeExpired(1000)
+		}
 	}()
 
 	return dnsUDP, dnsTCP
 }
 
-// Handle a DNS request
+// Handle a DNS request: either forward or spoof it.
 func handleDNS(w dns.ResponseWriter, req *dns.Msg) {
-	name := strings.TrimRight(req.Question[0].Name, ".")
-
-	// TODO: Wait until _hosts are loaded, except when downloading the host lists
-
+	// No or invalid question section? Just bail out.
 	if len(req.Question) == 0 {
 		dns.HandleFailed(w, req)
 		return
 	}
 
-	// We only need to spoof A and AAAA records
+	// We only need to spoof A and AAAA records; we can forward everything else.
 	t := dns.TypeToString[req.Question[0].Qtype]
 	if t != "A" && t != "AAAA" {
-		forward(_config.DNSForward.String(), w, req)
+		forward(dnsForward, w, req)
 		return
 	}
 
+	name := strings.TrimRight(req.Question[0].Name, ".")
 	response, fromCache := getResponse(name, t)
+
 	switch response {
 	case reponseForward:
 		if !fromCache {
-			//info(fmt.Sprintf("%sorward  %v", greenbg("f"), name))
-			infoc(fmt.Sprintf("forward  %v", name), "green")
+			msg.Infoc(fmt.Sprintf("forward  %v", name), "green", verbose)
 		}
-		forward(_config.DNSForward.String(), w, req)
+		forward(dnsForward, w, req)
 	case reponseSpoof:
 		if !fromCache {
-			//info(fmt.Sprintf("%spoof    %v", orangebg("s"), name))
-			infoc(fmt.Sprintf("spoof    %v", name), "orange")
+			msg.Infoc(fmt.Sprintf("spoof    %v", name), "orange", verbose)
 		}
 		spoof(name, w, req)
-	case reponseEmty:
-		if !fromCache {
-			//info(fmt.Sprintf("empty  %v", name))
-		}
+	case reponseEmpty:
 		spoofEmpty(w, req)
 	}
 }
@@ -78,70 +101,29 @@ func handleDNS(w dns.ResponseWriter, req *dns.Msg) {
 // Get response from cache (if it exists and is not expired), or determine a new
 // response.
 func getResponse(name, t string) (response uint8, fromCache bool) {
-	// First check override
-	// TODO: It might be better/faster to clear cache entries when adding
-	// override?
 	if checkOverride(name) {
 		return reponseForward, false
 	}
 
 	cachekey := t + " " + name
-	_cachelock.Lock()
-	cache, haveCache := _cache[cachekey]
-	_cachelock.Unlock()
 
+	cache, haveCache := Cache.Get(cachekey)
 	if haveCache && cache.expires > time.Now().Unix() {
 		return cache.response, true
 	}
 
 	response = determineResponse(name, t)
-
-	_cachelock.Lock()
-	_cache[cachekey] = cacheT{
-		expires:  time.Now().Unix() + int64(_config.CacheDNS),
+	Cache.Store(cachekey, CacheEntry{
+		expires:  time.Now().Unix() + dnsCache,
 		response: response,
-	}
-	_cachelock.Unlock()
+	})
 
 	return response, false
 }
 
-func checkOverride(name string) bool {
-	_overrideHostsLock.Lock()
-	defer _overrideHostsLock.Unlock()
-
-	expires, haveOverride := _overrideHosts[name]
-
-	if !haveOverride {
-		labels := strings.Split(name, ".")
-		c := ""
-		l := len(labels)
-		for i := 0; i < l; i++ {
-			if c == "" {
-				c = labels[l-i-1]
-			} else {
-				c = labels[l-i-1] + "." + c
-			}
-
-			expires, haveOverride = _overrideHosts[c]
-			if haveOverride {
-				break
-			}
-		}
-	}
-
-	// Make sure it's not expires
-	if haveOverride {
-		if time.Now().Unix() > expires {
-			delete(_overrideHosts, name)
-			haveOverride = false
-		}
-	}
-
-	return haveOverride
-}
-
-// Determine what to do with the hostname name. Returns a RESPONSE_* constant.
+// Determine what to do with the hostname name.
+//
+// Returns a response* constant.
 func determineResponse(name, t string) uint8 {
 	var doSpoof bool
 
@@ -162,9 +144,7 @@ func determineResponse(name, t string) uint8 {
 				c = labels[l-i-1] + "." + c
 			}
 
-			_hostsLock.Lock()
-			_, doSpoof = _hosts[c]
-			_hostsLock.Unlock()
+			_, doSpoof = cfg.Hosts.Get(c)
 			if doSpoof {
 				break
 			}
@@ -172,14 +152,7 @@ func determineResponse(name, t string) uint8 {
 
 		// Regexps
 		if !doSpoof {
-			_regexpsLock.Lock()
-			for _, r := range _regexps {
-				if r.MatchString(name) {
-					doSpoof = true
-					break
-				}
-			}
-			_regexpsLock.Unlock()
+			doSpoof = cfg.Regexps.Match(name)
 		}
 	}
 
@@ -191,7 +164,7 @@ func determineResponse(name, t string) uint8 {
 	// port number). IPv6 only has one loopback address (::1) and nota /8 like
 	// IPv4...
 	if doSpoof && t == "AAAA" {
-		return reponseEmty
+		return reponseEmpty
 	} else if doSpoof {
 		return reponseSpoof
 	} else {
@@ -199,12 +172,43 @@ func determineResponse(name, t string) uint8 {
 	}
 }
 
+func checkOverride(name string) bool {
+	expires, haveOverride := cfg.Override.Get(name)
+
+	if !haveOverride {
+		labels := strings.Split(name, ".")
+		c := ""
+		l := len(labels)
+		for i := 0; i < l; i++ {
+			if c == "" {
+				c = labels[l-i-1]
+			} else {
+				c = labels[l-i-1] + "." + c
+			}
+
+			expires, haveOverride = cfg.Override.Get(c)
+			if haveOverride {
+				break
+			}
+		}
+	}
+
+	// Make sure it's not expires
+	if haveOverride {
+		if time.Now().Unix() > expires {
+			cfg.Override.Delete(name)
+			haveOverride = false
+		}
+	}
+	return haveOverride
+}
+
 // Spoof DNS response by replying with the address of our HTTP server. This only
 // does A records.
 func spoof(name string, w dns.ResponseWriter, req *dns.Msg) {
-	spec := fmt.Sprintf("%s. 1 IN A %s", name, _config.HTTPListen.Host)
+	spec := fmt.Sprintf("%s. 1 IN A %s", name, httpAddr)
 	rr, err := dns.NewRR(spec)
-	fatal(err)
+	msg.Fatal(err)
 
 	sendSpoof([]dns.RR{rr}, w, req)
 }
@@ -216,25 +220,25 @@ func spoofEmpty(w dns.ResponseWriter, req *dns.Msg) {
 
 // Make a message with the answer and write it to the client
 func sendSpoof(answer []dns.RR, w dns.ResponseWriter, req *dns.Msg) {
-	var msg dns.Msg
-	msg.MsgHdr.Id = req.MsgHdr.Id
-	msg.MsgHdr.Response = true
-	msg.MsgHdr.RecursionDesired = true
-	msg.MsgHdr.RecursionAvailable = true
-	msg.Question = req.Question
+	var spoof dns.Msg
+	spoof.MsgHdr.Id = req.MsgHdr.Id
+	spoof.MsgHdr.Response = true
+	spoof.MsgHdr.RecursionDesired = true
+	spoof.MsgHdr.RecursionAvailable = true
+	spoof.Question = req.Question
 
 	// Set cache to 0
 	for i := range answer {
 		answer[i].Header().Ttl = 0
 	}
 
-	msg.Answer = answer
-	msg.Ns = []dns.RR{}
-	msg.Extra = []dns.RR{}
+	spoof.Answer = answer
+	spoof.Ns = []dns.RR{}
+	spoof.Extra = []dns.RR{}
 
-	err := w.WriteMsg(&msg)
+	err := w.WriteMsg(&spoof)
 	if err != nil {
-		warn(fmt.Errorf("unable to spoof DNS request for %v: %v",
+		msg.Warn(fmt.Errorf("unable to spoof DNS request for %v: %v",
 			req.Question[0], err))
 	}
 }
@@ -268,7 +272,7 @@ func forward(addr string, w dns.ResponseWriter, req *dns.Msg) {
 	resp, _, err := c.Exchange(req, addr)
 	if err != nil {
 		dns.HandleFailed(w, req)
-		warn(fmt.Errorf("unable to forward DNS request for %v to %v: %v",
+		msg.Warn(fmt.Errorf("unable to forward DNS request for %v to %v: %v",
 			req.Question[0], addr, err))
 		return
 	}
@@ -281,7 +285,7 @@ func forward(addr string, w dns.ResponseWriter, req *dns.Msg) {
 	}
 	err = w.WriteMsg(resp)
 	if err != nil {
-		warn(fmt.Errorf("unable to write DNS request for %v to %v: %v",
+		msg.Warn(fmt.Errorf("unable to write DNS request for %v to %v: %v",
 			req.Question[0], addr, err))
 	}
 }

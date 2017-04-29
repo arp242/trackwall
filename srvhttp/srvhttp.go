@@ -1,9 +1,8 @@
 // Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-package main
-
-// The HTTP stuff
+// Package srvhttp takes care of the HTTP stuff.
+package srvhttp
 
 import (
 	"crypto/rand"
@@ -21,6 +20,10 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"arp242.net/trackwall/cfg"
+	"arp242.net/trackwall/msg"
+	"arp242.net/trackwall/srvdns"
 )
 
 const _blocked = `<html><head><title> trackwall %[1]s</title></head><body>
@@ -38,12 +41,13 @@ const _list = `<html><head><title>trackwall</title></head><body><ul>
 <li><a href="/$@_list/cache">cache</a></li>
 </ul></body></html>`
 
-func bindHTTP() (listenHTTP, listenHTTPS net.Listener) {
-	listenHTTP, err := net.Listen("tcp", _config.HTTPListen.String())
-	fatal(err)
+// Bind the sockets.
+func Bind() (listenHTTP, listenHTTPS net.Listener) {
+	listenHTTP, err := net.Listen("tcp", cfg.Config.HTTPListen.String())
+	msg.Fatal(err)
 
-	listenHTTPS, err = net.Listen("tcp", _config.HTTPSListen.String())
-	fatal(err)
+	listenHTTPS, err = net.Listen("tcp", cfg.Config.HTTPSListen.String())
+	msg.Fatal(err)
 
 	return listenHTTP, listenHTTPS
 }
@@ -69,22 +73,23 @@ func (ln httpListener) Accept() (c net.Conn, err error) {
 	return tc, nil
 }
 
-func setupHTTPHandle(listenHTTP, listenHTTPS net.Listener) {
+// Serve HTTP requests.
+func Serve(listenHTTP, listenHTTPS net.Listener) {
 	go func() {
-		srv := &http.Server{Addr: _config.HTTPListen.String()}
+		srv := &http.Server{Addr: cfg.Config.HTTPListen.String()}
 		srv.Handler = &handleHTTP{}
 		err := srv.Serve(httpListener{listenHTTP.(*net.TCPListener)})
-		fatal(err)
+		msg.Fatal(err)
 	}()
 
 	go func() {
-		srv := &http.Server{Addr: _config.HTTPSListen.String()}
+		srv := &http.Server{Addr: cfg.Config.HTTPSListen.String()}
 		srv.Handler = &handleHTTP{}
 		srv.TLSConfig = &tls.Config{GetCertificate: getCert}
 
 		tlsListener := tls.NewListener(httpListener{listenHTTPS.(*net.TCPListener)}, srv.TLSConfig)
 		err := srv.Serve(tlsListener)
-		fatal(err)
+		msg.Fatal(err)
 	}()
 }
 
@@ -130,21 +135,16 @@ func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, h
 	if strings.HasPrefix(url, "$@_allow") {
 		params := strings.Split(url, "/")
 		//fmt.Println(params)
-		secs, err := durationToSeconds(params[1])
+		secs, err := msg.DurationToSeconds(params[1])
+		_ = secs
 		if err != nil {
-			warn(err)
+			msg.Warn(err)
 			return
 		}
 
 		// TODO: Always add the shortest entry from the hosts here
-		_overrideHostsLock.Lock()
-		defer _overrideHostsLock.Unlock()
-		_overrideHosts[host] = time.Now().Add(time.Duration(secs) * time.Second).Unix()
-
-		_cachelock.Lock()
-		delete(_cache, "A "+host)
-		delete(_cache, "AAAA "+host)
-		_cachelock.Unlock()
+		cfg.Override.Store(host, time.Now().Add(time.Duration(secs)*time.Second).Unix())
+		srvdns.Cache.Delete("A "+host, "AAAA "+host)
 
 		// Redirect back to where the user came from
 		// TODO: Also add query parameters and such!
@@ -161,26 +161,16 @@ func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, h
 		param := params[1]
 		switch param {
 		case "config":
-			spew.Fdump(w, _config)
+			spew.Fdump(w, cfg.Config)
 		case "hosts":
-			fmt.Fprintf(w, fmt.Sprintf("# Blocking %v hosts\n", len(_hosts)))
-			for k, v := range _hosts {
-				if v != "" {
-					fmt.Fprintf(w, fmt.Sprintf("%v  # %v\n", k, v))
-				} else {
-					fmt.Fprintf(w, fmt.Sprintf("%v\n", k))
-				}
-			}
+			fmt.Fprintf(w, fmt.Sprintf("# Blocking %v hosts\n", cfg.Hosts.Len()))
+			cfg.Hosts.Dump(w)
 		case "regexps":
-			for _, v := range _regexps {
-				fmt.Fprintf(w, fmt.Sprintf("%v\n", v))
-			}
+			cfg.Regexps.Dump(w)
 		case "override":
-			spew.Fdump(w, _override_hosts)
+			cfg.Override.Dump(w)
 		case "cache":
-			_cachelock.Lock()
-			spew.Fdump(w, _cache)
-			_cachelock.Unlock()
+			srvdns.Cache.Dump()
 		}
 		*/
 	} else {
@@ -191,24 +181,13 @@ func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, h
 // Try to find a surrogate.
 func findSurrogate(host string) (script string, success bool) {
 	// Exact match! Hurray! This is fastest.
-	_hostsLock.Lock()
-	sur, exists := _hosts[host]
-	_hostsLock.Unlock()
+	sur, exists := cfg.Hosts.Get(host)
 	if exists && sur != "" {
 		return sur, true
 	}
 
 	// Slower check if a regex matches the domain
-	_surrogatesLock.Lock()
-	defer _surrogatesLock.Unlock()
-	for _, sur := range _surrogates {
-		//fmt.Println(host, sur)
-		if sur.MatchString(host) {
-			return sur.script, true
-		}
-	}
-
-	return "", false
+	return cfg.Surrogates.Match(host)
 }
 
 // Generate a certificate for the domain
@@ -227,7 +206,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// openssl genrsa -out s7.addthis.com.key 2048
 	keyfile := fmt.Sprintf("/cache/certs/%s.key", name)
 	if _, err := os.Stat(keyfile); os.IsNotExist(err) {
-		dbg("    Making a key for " + name)
+		msg.Debug("    Making a key for " + name)
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
 			return nil, err
@@ -250,7 +229,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// openssl req -new -key s7.addthis.com.key -out s7.addthis.com.csr
 	csrfile := fmt.Sprintf("/cache/certs/%s.csr", name)
 	if _, err := os.Stat(csrfile); os.IsNotExist(err) {
-		dbg("    Making a csr for " + name)
+		msg.Debug("    Making a csr for " + name)
 		template := x509.CertificateRequest{}
 
 		if ip := net.ParseIP(name); ip != nil {
@@ -279,28 +258,28 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// openssl x509 -req -in s7.addthis.com.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out s7.addthis.com.crt -days 500 -sha256
 	certfile := fmt.Sprintf("/cache/certs/%s.crt", name)
 	if _, err := os.Stat(certfile); os.IsNotExist(err) {
-		dbg("    Making a cert for " + name)
+		msg.Debug("    Making a cert for " + name)
 
 		// Load root CA
-		fp, err := os.Open(_config.RootCert)
+		fp, err := os.Open(cfg.Config.RootCert)
 		data, err := ioutil.ReadAll(fp)
 		rootpem, _ := pem.Decode(data)
 		fp.Close()
 		rootcerts, err := x509.ParseCertificates(rootpem.Bytes)
 		if err != nil {
-			warn(err)
+			msg.Warn(err)
 			return nil, err
 		}
 		rootcert := *rootcerts[0]
 
 		// Load root key
-		fp, err = os.Open(_config.RootKey)
+		fp, err = os.Open(cfg.Config.RootKey)
 		data, err = ioutil.ReadAll(fp)
 		rootpem, _ = pem.Decode(data)
 		fp.Close()
 		rootkey, err := x509.ParsePKCS1PrivateKey(rootpem.Bytes)
 		if err != nil {
-			warn(err)
+			msg.Warn(err)
 			return nil, err
 		}
 
@@ -327,7 +306,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 
 		cert, err := x509.CreateCertificate(rand.Reader, &template, &rootcert, &rootkey.PublicKey, rootkey)
 		if err != nil {
-			warn(err)
+			msg.Warn(err)
 			return nil, err
 		}
 		fp, err = os.Create(certfile)
@@ -340,50 +319,52 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	}
 
 	// We can now use the files to make a TLS certificate
-	dbg(fmt.Sprintf("tls %s, %s", certfile, keyfile))
+	msg.Debug(fmt.Sprintf("tls %s, %s", certfile, keyfile))
 	//tlscert, err := tls.LoadX509KeyPair(certfile, keyfile)
-	tlscert, err := tls.LoadX509KeyPair(certfile, _config.RootKey)
+	tlscert, err := tls.LoadX509KeyPair(certfile, cfg.Config.RootKey)
 	if err != nil {
-		warn(err)
+		msg.Warn(err)
 		return nil, err
 	}
 
 	return &tlscert, nil
 }
 
+// MakeRootKey makes a new root key.
 // openssl genrsa -out /var/trackwall/rootCA.key 2048
 // NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
-func makeRootKey() {
-	warn(fmt.Errorf("generating a new root key at %s", _config.RootKey))
+func MakeRootKey() {
+	msg.Warn(fmt.Errorf("generating a new root key at %s", cfg.Config.RootKey))
 
-	p := chrootdir(_config.RootKey)
+	p := cfg.Config.ChrootDir(cfg.Config.RootKey)
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	fatal(err)
+	msg.Fatal(err)
 
 	fp, err := os.Create(p)
-	fatal(err)
+	msg.Fatal(err)
 
 	pem.Encode(fp, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 	fp.Close()
 
-	fatal(os.Chmod(p, os.FileMode(0600)))
+	msg.Fatal(os.Chmod(p, os.FileMode(0600)))
 }
 
+// MakeRootCert makes a new root certificate.
 // openssl req -x509 -new -nodes -key /var/trackwall/rootCA.key -sha256 -days 1024 -out /var/trackwall/rootCA.pem
 // NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
-func makeRootCert() {
-	warn(fmt.Errorf("generating a new root certificate at %s", _config.RootCert))
+func MakeRootCert() {
+	msg.Warn(fmt.Errorf("generating a new root certificate at %s", cfg.Config.RootCert))
 
-	key := chrootdir(_config.RootKey)
-	p := chrootdir(_config.RootCert)
+	key := cfg.Config.ChrootDir(cfg.Config.RootKey)
+	p := cfg.Config.ChrootDir(cfg.Config.RootCert)
 
 	fp, err := os.Open(key)
 	data, err := ioutil.ReadAll(fp)
 	rootpem, _ := pem.Decode(data)
 	fp.Close()
 	rootkey, err := x509.ParsePKCS1PrivateKey(rootpem.Bytes)
-	fatal(err)
+	msg.Fatal(err)
 
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	template := x509.Certificate{
@@ -399,14 +380,14 @@ func makeRootCert() {
 	}
 
 	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, &rootkey.PublicKey, rootkey)
-	fatal(err)
+	msg.Fatal(err)
 	fp, err = os.Create(p)
-	fatal(err)
+	msg.Fatal(err)
 
 	pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
 	fp.Close()
 
-	fatal(os.Chmod(p, os.FileMode(0600)))
+	msg.Fatal(os.Chmod(p, os.FileMode(0600)))
 }
 
 // Install in system

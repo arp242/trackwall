@@ -1,9 +1,8 @@
 // Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-package main
-
-// The control socket
+// Package srvctl contains the control socket
+package srvctl
 
 import (
 	"bufio"
@@ -13,21 +12,27 @@ import (
 	"runtime"
 	"strings"
 
+	"arp242.net/trackwall/cfg"
+	"arp242.net/trackwall/msg"
+	"arp242.net/trackwall/srvdns"
+
 	"github.com/davecgh/go-spew/spew"
 )
 
-func bindCtl() net.Listener {
-	l, err := net.Listen("tcp", _config.ControlListen.String())
-	fatal(err)
+// Bind the socket.
+func Bind() net.Listener {
+	l, err := net.Listen("tcp", cfg.Config.ControlListen.String())
+	msg.Fatal(err)
 	return l
 }
 
-func setupCtlHandle(l net.Listener) {
+// Serve requests.
+func Serve(l net.Listener) {
 	go func() {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				warn(err)
+				msg.Warn(err)
 				continue
 			}
 			go handleCtl(conn)
@@ -40,7 +45,7 @@ func handleCtl(conn net.Conn) {
 
 	data, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
-		warn(err)
+		msg.Warn(err)
 		return
 	}
 
@@ -89,15 +94,13 @@ func handleCtl(conn net.Conn) {
 	}
 
 	fmt.Fprintf(conn, w+"\n")
-	warn(err)
+	msg.Warn(err)
 }
 
 func handleCache(cmd string, w net.Conn) (out string) {
 	switch cmd {
 	case "flush":
-		_cachelock.Lock()
-		_cache = make(map[string]cacheT)
-		_cachelock.Unlock()
+		srvdns.Cache.Purge()
 		out = "okay"
 	default:
 		out = fmt.Sprintf("error: unknown subcommand: %#v", cmd)
@@ -109,9 +112,7 @@ func handleCache(cmd string, w net.Conn) (out string) {
 func handleOverride(cmd string, w net.Conn) (out string) {
 	switch cmd {
 	case "flush":
-		_overrideHostsLock.Lock()
-		_overrideHosts = make(map[string]int64)
-		_overrideHostsLock.Unlock()
+		cfg.Override.Purge()
 		out = "okay"
 	default:
 		out = fmt.Sprintf("error: unknown subcommand: %#v", cmd)
@@ -129,41 +130,21 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 		runtime.GC()
 		runtime.ReadMemStats(&stats)
 
-		_hostsLock.Lock()
-		fmt.Fprintf(w, "hosts:             %v\n", len(_hosts))
-		_hostsLock.Unlock()
-		_regexpsLock.Lock()
-		fmt.Fprintf(w, "regexps:           %v\n", len(_regexps))
-		_regexpsLock.Unlock()
-		fmt.Fprintf(w, "cache items:       %v\n", len(_cache))
+		fmt.Fprintf(w, "hosts:             %v\n", cfg.Hosts.Len())
+		fmt.Fprintf(w, "regexps:           %v\n", cfg.Regexps.Len())
+		fmt.Fprintf(w, "cache items:       %v\n", srvdns.Cache.Len())
 		fmt.Fprintf(w, "memory allocated:  %vKb\n", stats.Sys/1024)
 	case "config":
-		scs.Fdump(w, _config)
+		scs.Fdump(w, cfg.Config)
 	case "cache":
-		_cachelock.Lock()
-		scs.Fdump(w, _cache)
-		_cachelock.Unlock()
+		srvdns.Cache.Dump(w)
 	case "hosts":
-		fmt.Fprintf(w, fmt.Sprintf("# Blocking %v hosts\n", len(_hosts)))
-		_hostsLock.Lock()
-		for k, v := range _hosts {
-			if v != "" {
-				fmt.Fprintf(w, fmt.Sprintf("%v  # %v\n", k, v))
-			} else {
-				fmt.Fprintf(w, fmt.Sprintf("%v\n", k))
-			}
-		}
-		_hostsLock.Unlock()
+		fmt.Fprintf(w, fmt.Sprintf("# Blocking %v hosts\n", cfg.Hosts.Len()))
+		cfg.Hosts.Dump(w)
 	case "regexps":
-		_regexpsLock.Lock()
-		for _, v := range _regexps {
-			fmt.Fprintf(w, fmt.Sprintf("%v\n", v))
-		}
-		_regexpsLock.Unlock()
+		cfg.Regexps.Dump(w)
 	case "override":
-		_overrideHostsLock.Lock()
-		scs.Fdump(w, _overrideHosts)
-		_overrideHostsLock.Unlock()
+		cfg.Override.Dump(w)
 	default:
 		out = fmt.Sprintf("error: unknown subcommand: %#v", cmd)
 	}
@@ -171,14 +152,15 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 	return out
 }
 
-func writeCtl(what string) {
-	conn, err := net.Dial("tcp", _config.ControlListen.String())
-	fatal(err)
+// Write to the server.
+func Write(what string) {
+	conn, err := net.Dial("tcp", cfg.Config.ControlListen.String())
+	msg.Fatal(err)
 	defer func() { _ = conn.Close() }()
 
 	fmt.Fprintf(conn, what+"\n")
 	data, err := ioutil.ReadAll(conn)
-	fatal(err)
+	msg.Fatal(err)
 	fmt.Println(strings.TrimSpace(string(data)))
 }
 
