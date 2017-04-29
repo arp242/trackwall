@@ -136,6 +136,8 @@ func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, h
 		}
 
 		// TODO: Always add the shortest entry from the hosts here
+		_overrideHostsLock.Lock()
+		defer _overrideHostsLock.Unlock()
 		_overrideHosts[host] = time.Now().Add(time.Duration(secs) * time.Second).Unix()
 
 		_cachelock.Lock()

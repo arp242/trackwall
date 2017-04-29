@@ -1,8 +1,9 @@
 // Copyright © 2016 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-// The control socket
 package main
+
+// The control socket
 
 import (
 	"bufio"
@@ -83,7 +84,6 @@ func handleCtl(conn net.Conn) {
 		}
 	case "host":
 	case "regex":
-	case "log":
 	default:
 		w = fmt.Sprintf("error: unknown command: %#v", data)
 	}
@@ -98,8 +98,9 @@ func handleCache(cmd string, w net.Conn) (out string) {
 		_cachelock.Lock()
 		_cache = make(map[string]cacheT)
 		_cachelock.Unlock()
+		out = "okay"
 	default:
-		out = "error: unknown subcommand"
+		out = fmt.Sprintf("error: unknown subcommand: %#v", cmd)
 	}
 
 	return out
@@ -108,10 +109,12 @@ func handleCache(cmd string, w net.Conn) (out string) {
 func handleOverride(cmd string, w net.Conn) (out string) {
 	switch cmd {
 	case "flush":
-		// TODO: lock!
+		_overrideHostsLock.Lock()
 		_overrideHosts = make(map[string]int64)
+		_overrideHostsLock.Unlock()
+		out = "okay"
 	default:
-		out = "error: unknown subcommand"
+		out = fmt.Sprintf("error: unknown subcommand: %#v", cmd)
 	}
 
 	return out
@@ -158,9 +161,11 @@ func handleStatus(cmd string, w net.Conn) (out string) {
 		}
 		_regexpsLock.Unlock()
 	case "override":
+		_overrideHostsLock.Lock()
 		scs.Fdump(w, _overrideHosts)
+		_overrideHostsLock.Unlock()
 	default:
-		out = "error: unknown subcommand"
+		out = fmt.Sprintf("error: unknown subcommand: %#v", cmd)
 	}
 
 	return out

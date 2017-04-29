@@ -13,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"arp242.net/trackwall/cmdline"
 )
 
 const (
@@ -50,7 +52,8 @@ var (
 	// Hosts to override; value is timestamp, once that's expired the entry will be
 	// removed from the list
 	// Also used for the regexps.
-	_overrideHosts = make(map[string]int64)
+	_overrideHosts     = make(map[string]int64)
+	_overrideHostsLock sync.RWMutex
 
 	// Cache DNS responses, the key is the hostname to cache
 	_cache     = make(map[string]cacheT)
@@ -64,67 +67,71 @@ func main() {
 	info("starting trackwall")
 
 	if len(os.Args) < 2 {
-		usage("global", "")
+		cmdline.Usage("global", "")
 		os.Exit(0)
 	}
-	commands := cmdline(os.Args[1:])
+	commands, config, verbose, err := cmdline.Process(os.Args[1:])
+	fatal(err)
+	_verbose = verbose
 	if len(commands) == 0 {
-		usage("global", "")
+		cmdline.Usage("global", "")
 		os.Exit(0)
+	}
+
+	err = loadConfig(config)
+	if err != nil {
+		fatal(fmt.Errorf("cannot load %v: %v", config, err))
 	}
 
 	switch commands[0] {
 	case "help":
 		if len(commands) > 1 {
-			usage(commands[1], "")
+			cmdline.Usage(commands[1], "")
 		} else {
-			usage("global", "")
+			cmdline.Usage("global", "")
 		}
 	case "version":
 		if len(commands) > 1 {
-			usage("version", "version does not accept commands")
+			cmdline.Usage("version", "version does not accept commands")
 		}
 		fmt.Println("0.1")
 	case "server":
 		if len(commands) > 1 {
-			usage("version", "server does not accept commands")
+			cmdline.Usage("version", "server does not accept commands")
 		}
 		listen()
 	case "compile":
 		if len(commands) > 1 {
-			usage("version", "compile does not accept commands")
+			cmdline.Usage("version", "compile does not accept commands")
 		}
 		compile()
 	case "status":
 		if len(commands) < 2 {
-			usage("status", "status needs a command")
+			cmdline.Usage("status", "status needs a command")
 		}
 		writeCtl(strings.Join(commands, " "))
 	case "cache":
 		if len(os.Args) < 2 {
-			usage("cache", "cache needs a command")
+			cmdline.Usage("cache", "cache needs a command")
 		}
 		writeCtl(strings.Join(commands, " "))
 	case "override":
 		if len(os.Args) < 2 {
-			usage("override", "override needs a command")
+			cmdline.Usage("override", "override needs a command")
 		}
 		writeCtl(strings.Join(commands, " "))
 	case "host":
 		if len(os.Args) < 2 {
-			usage("override", "override needs a command")
+			cmdline.Usage("override", "override needs a command")
 		}
 		writeCtl(strings.Join(commands, " "))
 	case "regex":
 		if len(os.Args) < 2 {
-			usage("override", "override needs a command")
+			cmdline.Usage("override", "override needs a command")
 		}
 		writeCtl(strings.Join(commands, " "))
-	case "log":
-		if len(os.Args) < 2 {
-			usage("override", "override needs a command")
-		}
-		writeCtl(strings.Join(commands, " "))
+	default:
+		writeCtl(fmt.Sprintf("error: unknown command: %#v", commands[0]))
 	}
 }
 

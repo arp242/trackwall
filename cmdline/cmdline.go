@@ -1,5 +1,5 @@
-// Process commandline arguments
-package main
+// Package cmdline processes the commandline arguments.
+package cmdline
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 var _usage = map[string]string{
 	// Global opts
 	"global_opts": `
-Global options:
+Global arguments:
     -v        Verbose output
     -h        Show help
     -f path   Path to the configuration file
@@ -23,21 +23,34 @@ Global options:
 	"global": `
 Usage: %[1]s command [arguments]
 
+%[2]s
+
 Commands:
     help      Show this help
     version   Show version and exit
     server    Run as DNS/HTTP server
     compile   Compile the host list
+
+Controlling a running trackwall instance:
     status    Show server status
+        summary   Show a brief summary
+        config    Show the configuration values
+        cache     Show the cache
+        hosts     Show hosts (may be a lot of output)
+        regexps   Show regexps
+        override  Show override table
     cache     Control cache
+        flush     Flush all cache
     override  Control override
+        flush     Flush all overrides
     host      Control host list
+        add       Add new hosts
+        rm        Remove hosts
     regex     Control regexp list
-    log       Get log information
+        add       Add new regexp
+        rm        Remove regexp
 
-%[2]s
-
-Use %[1]s [command] -h for more help on a specific command.
+Use '%[1]s [command] -h' or '%[1]s help command' for more detailed help.
 `,
 
 	// Help
@@ -60,6 +73,8 @@ Show program version and exit with code 0.
 	"server": `
 Usage: %[1]s server [arguments]
 
+%[2]s
+
 Start the DNS and HTTP(S) server. This is the main operation of the program.
 Almost all options are controlled through the configuration file.
 
@@ -68,26 +83,24 @@ provides some mechanism to cope with this (many do, such as daemontools, runit,
 systemd, upstart, etc).
 For systems that don't provide this, you'll need to use a wrapper.
 
-%[2]s
-
 `,
 	// Compile
 	"compile": `
 Usage: %[1]s compile [arguments]
 
+%[2]s
+
 Compile all the hosts (as added with hostlist, host, unhostlist, and unhost in
 the configuration file) to one "compiled" file with duplicates and redundant
-entries removed. trackwall doesn't do this automatically on startup since this is
-a comparatively expensive operation.
+entries removed. trackwall doesn't do this automatically on startup since this
+is a comparatively expensive operation.
 
-You don't strictly need to do this, but it will make the program run start up
-and run slightly faster.
+You don't strictly need to do this, but it will make the program start up and
+run a bit faster.
 
 The result is written to /compiled-hosts in the chroot directory and is used
 automatically if its mtime is not older than cache-hosts. If it's older trackwall
 will show a warning and ignore the file.
-
-%[2]s
 `,
 
 	// Status
@@ -103,6 +116,8 @@ Commands:
     hosts     Show hosts (may be a lot of output)
     regexps   Show regexps
     override  Show override table
+
+Get status of running Trackwall instance.
 `,
 
 	// Cache
@@ -146,24 +161,21 @@ Commands:
     add [regexp1 regexp2 ...]  Add new regexp
     rm [regexp1 regexp2 ...]   Remove regexp
 `,
-
-	// Log
-	"log": `
-Usage: %[1]s log [arguments]
-
-Get all log messages
-
-%[2]s
-`,
 }
 
 // Process commandline arguments
-func cmdline(args []string) []string {
+func Process(args []string) (
+	words []string,
+	config string,
+	verbose bool,
+	err error,
+) {
 	opts, words, err := getopt(args, "")
-	fatal(err)
+	if err != nil {
+		return nil, "", false, err
+	}
 
 	showHelp := false
-	config := ""
 	for opt, arg := range opts {
 		switch opt {
 		case "-h":
@@ -171,7 +183,7 @@ func cmdline(args []string) []string {
 		case "-f":
 			config = arg
 		case "-v":
-			_verbose = true
+			verbose = true
 		}
 	}
 
@@ -181,22 +193,18 @@ func cmdline(args []string) []string {
 
 	if showHelp {
 		if len(words) == 0 {
-			usage("global", "")
+			Usage("global", "")
 		} else {
-			usage(words[0], "")
+			Usage(words[0], "")
 		}
 		os.Exit(0)
 	}
 
-	err = loadConfig(config)
-	if err != nil {
-		fatal(fmt.Errorf("error loading file %v: %v", config, err.Error()))
-	}
-	return words
+	return words, config, verbose, nil
 }
 
-// Print usage info
-func usage(name, err string) {
+// Usage prints out the help info.
+func Usage(name, err string) {
 	out := os.Stdout
 	if err != "" {
 		fmt.Fprintf(out, "Error: %s\n\n", err)
@@ -211,7 +219,8 @@ func usage(name, err string) {
 	}
 }
 
-// TODO: Support long --options
+// Args is the list of argument the user gave (e.g. os.Args), shortopts is the
+// definition of options.
 func getopt(args []string, shortopts string) (opts map[string]string, words []string, err error) {
 	shortopts += "hvf:"
 
@@ -221,12 +230,6 @@ func getopt(args []string, shortopts string) (opts map[string]string, words []st
 	for _, arg := range args {
 		// Command
 		if !strings.HasPrefix(arg, "-") {
-			newargs = append(newargs, arg)
-			continue
-		}
-
-		// Long option
-		if strings.HasPrefix(arg, "--") {
 			newargs = append(newargs, arg)
 			continue
 		}
@@ -241,9 +244,16 @@ func getopt(args []string, shortopts string) (opts map[string]string, words []st
 	// Now parse the options
 	opts = make(map[string]string)
 	stopParsing := false
+	skipNext := false
 	for argi, arg := range args {
 		if arg == "--" {
 			stopParsing = true
+			continue
+		}
+
+		if skipNext {
+			skipNext = false
+			continue
 		}
 
 		if !strings.HasPrefix(arg, "-") || stopParsing {
@@ -261,6 +271,7 @@ func getopt(args []string, shortopts string) (opts map[string]string, words []st
 					return opts, words, fmt.Errorf("the option %s requires an argument", arg)
 				}
 				opts[arg] = args[argi+1]
+				skipNext = true
 			} else {
 				opts[arg] = ""
 			}

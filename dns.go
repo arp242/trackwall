@@ -106,7 +106,9 @@ func getResponse(name, t string) (response uint8, fromCache bool) {
 }
 
 func checkOverride(name string) bool {
-	// Check override
+	_overrideHostsLock.Lock()
+	defer _overrideHostsLock.Unlock()
+
 	expires, haveOverride := _overrideHosts[name]
 
 	if !haveOverride {

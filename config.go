@@ -399,10 +399,6 @@ func (u *UserT) set(username string) {
 
 // loadConfig will load a config file from path
 func loadConfig(path string) error {
-	// sconfig.TypeHandlers["*regexp.Regexp"] = func(field *reflect.Value, v []string) interface{} {
-	// 	return regexp.MustCompile(v[0])
-	// }
-	//
 	sconfig.RegisterType("*main.AddrT", sconfig.ValidateSingleValue(),
 		func(v []string) (interface{}, error) {
 			a := &AddrT{}
