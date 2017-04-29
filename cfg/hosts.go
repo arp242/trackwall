@@ -35,7 +35,7 @@ func (l *HostList) Get(k string) (string, bool) {
 	return v, ok
 }
 
-// Len returns the lenght of the map.
+// Len returns the length of the map.
 func (l *HostList) Len() int {
 	l.Lock()
 	defer l.Unlock()

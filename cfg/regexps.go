@@ -27,7 +27,7 @@ func init() {
 	Regexps.Purge()
 }
 
-// Len returns the lenght of the list.
+// Len returns the length of the list.
 func (l *RegexpList) Len() int {
 	l.Lock()
 	defer l.Unlock()
