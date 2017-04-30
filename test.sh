@@ -19,7 +19,7 @@ find_deps() {
 		tr '\n' ' ' | sed 's/ $//' | tr ' ' ','
 }
 
-:>| coverage.txt
+echo 'mode: atomic' > coverage.txt
 for pkg in $(go list ./... | grep -v /vendor/); do
 	deps=$(find_deps "$pkg")
 	go test -race \
