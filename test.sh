@@ -33,5 +33,8 @@ for pkg in $(go list ./... | grep -v /vendor/); do
 	fi
 done
 
-[ -n "${TRAVIS:-}" ] && curl -s https://codecov.io/bash | bash
-#rm coverage.txt
+if [ -n "${TRAVIS:-}" ]; then
+	cat coverage.txt
+	bash <(curl -s https://codecov.io/bash)
+fi
+rm coverage.txt
