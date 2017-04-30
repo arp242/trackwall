@@ -18,21 +18,6 @@ import (
 	"arp242.net/trackwall/srvdns"
 )
 
-const _blocked = `<html><head><title> trackwall %[1]s</title></head><body>
-<p>trackwall blocked access to <code>%[1]s</code>. Unblock this domain for:</p>
-<ul><li><a href="/$@_allow/10s/%[2]s">ten seconds</a></li>
-<li><a href="/$@_allow/1h/%[2]s">an hour</a></li>
-<li><a href="/$@_allow/1d/%[2]s">a day</a></li>
-<li><a href="/$@_allow/10y/%[2]s">until restart</a></li></ul></body></html>`
-
-const _list = `<html><head><title>trackwall</title></head><body><ul>
-<li><a href="/$@_list/config">config</a></li>
-<li><a href="/$@_list/hosts">hosts</a></li>
-<li><a href="/$@_list/regexps">regexps</a></li>
-<li><a href="/$@_list/override">override</a></li>
-<li><a href="/$@_list/cache">cache</a></li>
-</ul></body></html>`
-
 // Bind the sockets.
 func Bind() (listenHTTP, listenHTTPS net.Listener) {
 	listenHTTP, err := net.Listen("tcp", cfg.Config.HTTPListen.String())
@@ -49,6 +34,7 @@ type httpListener struct {
 	*net.TCPListener
 }
 
+// Accept a new connection
 func (ln httpListener) Accept() (c net.Conn, err error) {
 	tc, err := ln.AcceptTCP()
 	if err != nil {
@@ -88,20 +74,24 @@ func Serve(listenHTTP, listenHTTPS net.Listener) {
 type handleHTTP struct{}
 
 func (f *handleHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Never cache anything here
+	// Never cache anything
 	w.Header().Set("Cache-Control", "private, max-age=0, no-cache, must-revalidate")
 
 	host := html.EscapeString(r.Host)
 	url := html.EscapeString(strings.TrimLeft(r.URL.Path, "/"))
 
-	// Special $@_ control URL
 	if strings.HasPrefix(url, "$@_") {
-		f.handleHTTPSpecial(w, r, host, url)
+		f.special(w, r, host, url)
 		return
 	}
 
+	f.spoof(w, r, host, url)
+}
+
+// Spoof
+func (f *handleHTTP) spoof(w http.ResponseWriter, r *http.Request, host, url string) {
 	// TODO: Do something sane with the Content-Type header
-	sur, success := findSurrogate(host)
+	sur, success := cfg.Surrogates.Find(host)
 	if success {
 		w.Header().Set("Content-Type", "application/javascript")
 		fmt.Fprintf(w, sur)
@@ -114,15 +104,15 @@ func (f *handleHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Add a comment so it won't give parse errors
 		// TODO: Make this a text message, rather than HTML
 		w.Header().Set("Content-Type", "application/javascript")
-		fmt.Fprintf(w, fmt.Sprintf("/*"+_blocked+"*/", host, url))
+		fmt.Fprintf(w, fmt.Sprintf("/*"+tplBlocked+"*/", host, url))
 	} else {
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, fmt.Sprintf("/*"+_blocked+"*/", host, url))
+		fmt.Fprintf(w, fmt.Sprintf("/*"+tplBlocked+"*/", host, url))
 	}
 }
 
 // Handle "special" $@_ urls
-func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, host, url string) {
+func (f *handleHTTP) special(w http.ResponseWriter, r *http.Request, host, url string) {
 	// $@_allow/duration/redirect
 	if strings.HasPrefix(url, "$@_allow") {
 		params := strings.Split(url, "/")
@@ -146,7 +136,7 @@ func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, h
 		/* else if strings.HasPrefix(url, "$@_list") {
 		params := strings.Split(url, "/")
 		if len(params) < 2 || params[1] == "" {
-			fmt.Fprintf(w, _list)
+			fmt.Fprintf(w, tplList)
 			return
 		}
 
@@ -168,18 +158,6 @@ func (f *handleHTTP) handleHTTPSpecial(w http.ResponseWriter, r *http.Request, h
 	} else {
 		fmt.Fprintf(w, "unknown command: %v", url)
 	}
-}
-
-// Try to find a surrogate.
-func findSurrogate(host string) (script string, success bool) {
-	// Exact match! Hurray! This is fastest.
-	sur, exists := cfg.Hosts.Get(host)
-	if exists && sur != "" {
-		return sur, true
-	}
-
-	// Slower check if a regex matches the domain
-	return cfg.Surrogates.Match(host)
 }
 
 // The MIT License (MIT)

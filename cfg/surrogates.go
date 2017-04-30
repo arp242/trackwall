@@ -31,8 +31,20 @@ func init() {
 	Surrogates.Purge()
 }
 
-// Match the host against all the surrogates.
-func (l *SurrogateList) Match(host string) (script string, gotMatch bool) {
+// Find a surrogate.
+func (l *SurrogateList) Find(host string) (script string, success bool) {
+	// Exact match! Hurray! This is fastest.
+	sur, exists := Hosts.Get(host)
+	if exists && sur != "" {
+		return sur, true
+	}
+
+	// Slower check if a regex matches the domain
+	return l.match(host)
+}
+
+// match the host against all the surrogates.
+func (l *SurrogateList) match(host string) (script string, gotMatch bool) {
 	l.Lock()
 	defer l.Unlock()
 	for _, sur := range l.l {
