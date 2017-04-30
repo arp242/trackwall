@@ -3,6 +3,5 @@ go_import_path: arp242.net/trackwall
 go:
   - 1.7.x
   - 1.8.x
-  - master
 script:
   - ./test.sh
