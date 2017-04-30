@@ -19,7 +19,7 @@ find_deps() {
 		tr '\n' ' ' | sed 's/ $//' | tr ' ' ','
 }
 
-echo >| coverage.txt
+:>| coverage.txt
 for pkg in $(go list ./... | grep -v /vendor/); do
 	deps=$(find_deps "$pkg")
 	go test -race \
@@ -28,10 +28,10 @@ for pkg in $(go list ./... | grep -v /vendor/); do
 		-coverpkg=$deps \
 		"$pkg"
 	if [ -f coverage.tmp ]; then
-		cat coverage.tmp >> coverage.txt
+		tail -n+2 coverage.tmp >> coverage.txt
 		rm coverage.tmp
 	fi
 done
 
 [ -n "${TRAVIS:-}" ] && curl -s https://codecov.io/bash | bash
-rm coverage.txt
+#rm coverage.txt
