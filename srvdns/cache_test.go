@@ -3,6 +3,8 @@ package srvdns
 import (
 	"fmt"
 	"testing"
+
+	"arp242.net/trackwall/tt"
 )
 
 func TestCache(t *testing.T) {
@@ -11,14 +13,17 @@ func TestCache(t *testing.T) {
 		expectedLen int
 	}{
 		{&CacheList{}, 0},
+		{&CacheList{
+			m: map[string]CacheEntry{
+				"x": CacheEntry{},
+			},
+		}, 1},
 	}
 
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%v", i), func(t *testing.T) {
-			outLen := tc.in.Len()
-			if outLen != tc.expectedLen {
-				t.Errorf("\nout:      %#v\nexpected: %#v\n", outLen, tc.expectedLen)
-			}
+			tt.Eq(t, "outLen", tc.expectedLen,
+				tc.in.Len())
 		})
 	}
 

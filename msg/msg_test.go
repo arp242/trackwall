@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
+
+	"arp242.net/trackwall/tt"
 )
 
 func TestWarn(t *testing.T) {
@@ -15,7 +16,7 @@ func TestWarn(t *testing.T) {
 	}{
 		{nil, ""},
 		{errors.New("test warning"),
-			"warn msg_test.go:28 \x1b[48;5;9m     \x1b[0m test warning\n"},
+			"warn msg_test.go:29 \x1b[48;5;9m     \x1b[0m test warning\n"},
 	}
 
 	for i, tc := range cases {
@@ -52,12 +53,8 @@ func TestDurationToSeconds(t *testing.T) {
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%v", i), func(t *testing.T) {
 			out, outErr := DurationToSeconds(tc.in)
-			if !reflect.DeepEqual(tc.expectedErr, outErr) {
-				t.Errorf("\nout:      %#v\nexpected: %#v\n", outErr, tc.expectedErr)
-			}
-			if out != tc.expected {
-				t.Errorf("\nout:      %#v\nexpected: %#v\n", out, tc.expected)
-			}
+			tt.Eq(t, "out", tc.expected, out)
+			tt.Eq(t, "out", tc.expectedErr, outErr)
 		})
 	}
 }

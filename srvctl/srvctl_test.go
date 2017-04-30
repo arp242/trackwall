@@ -2,9 +2,10 @@ package srvctl
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
+
+	"arp242.net/trackwall/tt"
 )
 
 func TestReadCommand(t *testing.T) {
@@ -26,16 +27,9 @@ func TestReadCommand(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%v", tc.in), func(t *testing.T) {
 			out, outHTTP, outErr := readCommand(strings.NewReader(tc.in))
-			if outErr != nil {
-				t.Fatal(outErr)
-			}
-			if !reflect.DeepEqual(tc.expected, out) {
-				t.Errorf("\nout:      %#v\nexpected: %#v\n", out, tc.expected)
-			}
-
-			if outHTTP != tc.expectedHTTP {
-				t.Errorf("\nout:      %#v\nexpected: %#v\n", outHTTP, tc.expectedHTTP)
-			}
+			tt.Eq(t, "input", tc.expected, out)
+			tt.Eq(t, "isHTTP", tc.expectedHTTP, outHTTP)
+			tt.Eq(t, "err", tc.expectedErr, outErr)
 		})
 	}
 }

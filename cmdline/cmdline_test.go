@@ -2,8 +2,9 @@ package cmdline
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
+
+	"arp242.net/trackwall/tt"
 )
 
 func TestProcess(t *testing.T) {
@@ -89,23 +90,9 @@ func Test_getopt(t *testing.T) {
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%v", i), func(t *testing.T) {
 			outOpts, outWords, outErr := getopt(tc.inArgs, tc.inOpts)
-
-			if !reflect.DeepEqual(tc.expectedOpts, outOpts) {
-				t.Errorf("opts wrong\nout:      %#v\nexpected: %#v\n",
-					outOpts, tc.expectedOpts)
-			}
-			if !reflect.DeepEqual(tc.expectedWords, outWords) {
-				t.Errorf("word wrong\nout:      %#v\nexpected: %#v\n",
-					outWords, tc.expectedWords)
-			}
-			if !reflect.DeepEqual(tc.expectedErr, outErr) {
-				t.Errorf("err wrong\nout:      %#v\nexpected: %#v\n",
-					outErr, tc.expectedErr)
-			}
-
-			//if diff.Diff(tc.expected, out) != "" {
-			//	t.Errorf(diff.Cmp(tc.expected, out))
-			//}
+			tt.Eq(t, "outOpts", tc.expectedOpts, outOpts)
+			tt.Eq(t, "outWords", tc.expectedWords, outWords)
+			tt.Eq(t, "outErr", tc.expectedErr, outErr)
 		})
 	}
 }
