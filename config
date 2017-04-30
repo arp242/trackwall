@@ -189,6 +189,19 @@ surrogate .*googletag(manager|services)\.com$
 	publish:function(){return googletag}
 	}
 
+# http://ak.sail-horizon.com/horizon/v1.js
+surrogate ak\.sail-horizon\.com$
+	window.Sailthru={setup:@@}
+
+
+# http://tags.bkrtx.com/js/bk-coretag.js
+# http://regdev.idge.int/api/
+# http://reg.idgenterprise.com/api/
+surrogate .*bkrtx\.com$
+	window.bk_addPageCtx=@@;
+	window.bk_doJSTag=@@
+
+
 ###########################
 ### Add your own config ###
 ###########################

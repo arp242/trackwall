@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	stdout = os.Stdout
-	stderr = os.Stderr
+	stdout io.Writer = os.Stdout
+	stderr io.Writer = os.Stderr
 )
 
 // Fatal prints the error and exits if it's non-nil.
@@ -131,13 +131,13 @@ func msg(prefix, msg interface{}, fillColor string, fp io.Writer) {
 }
 
 func greenbg(m string) string {
-	return fmt.Sprintf("[48;5;154m%s[0m", m)
+	return fmt.Sprintf("\x1b[48;5;154m%s\x1b[0m", m)
 }
 
 func orangebg(m string) string {
-	return fmt.Sprintf("[48;5;221m%s[0m", m)
+	return fmt.Sprintf("\x1b[48;5;221m%s\x1b[0m", m)
 }
 
 func redbg(m string) string {
-	return fmt.Sprintf("[48;5;9m%s[0m", m)
+	return fmt.Sprintf("\x1b[48;5;9m%s\x1b[0m", m)
 }

@@ -1,5 +1,4 @@
 # This is a list of hosts I found which are *not* in the other hostlists.
-# Last update: 20160427
 
 
 # TODO: Why?!
@@ -102,5 +101,16 @@ host
 
 # Facebook tracker
 host connect.facebook.net
+
+# Don't need all the intercom crap
+host intercom.io intercomcdn.com
+
+# Some markething crap
+# https://cookiepedia.co.uk/host/ic-live.com
+host ic-live.com
+
+# Some analytics crap
+host cdn.segment.com
+
 
 # vim:ft=config

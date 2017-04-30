@@ -7,6 +7,7 @@ package srvctl
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"runtime"
 	"strings"
@@ -85,14 +86,18 @@ func handleCtl(conn net.Conn) {
 	msg.Warn(err)
 }
 
-func readCommand(conn net.Conn) ([]string, bool, error) {
+func readCommand(conn io.Reader) (
+	input []string,
+	isHTTP bool,
+	err error,
+) {
+
 	data, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
 		return nil, false, err
 	}
 
 	sdata := string(data)
-	isHTTP := false
 
 	// This accepts simple "telnet" style commands:
 	//   status summary
@@ -101,17 +106,16 @@ func readCommand(conn net.Conn) ([]string, bool, error) {
 	// But we also accept HTTP-style:
 	//   GET /status/summary HTTP/1.1\r\n
 	//   GET /host/add/example.com/example2.com HTTP/1.1\r\n"
-	var ldata []string
 	if strings.HasPrefix(sdata, "GET /") {
 		// Remove GET and HTTP/1.1\r\n
 		sdata = sdata[5 : len(sdata)-11]
-		ldata = strings.Split(strings.TrimSpace(sdata), "/")
+		input = strings.Split(strings.TrimSpace(sdata), "/")
 		isHTTP = true
 	} else {
-		ldata = strings.Split(strings.TrimSpace(sdata), " ")
+		input = strings.Split(strings.TrimSpace(sdata), " ")
 	}
 
-	return ldata, isHTTP, nil
+	return input, isHTTP, nil
 }
 
 func handleCache(cmd string, w net.Conn) (out string) {
