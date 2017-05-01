@@ -17,11 +17,6 @@ import (
 	"arp242.net/trackwall/msg"
 )
 
-var (
-	// Verbose print more info to the screen
-	Verbose = false
-)
-
 // AddrT is an IP or hostname
 type AddrT struct {
 	Host string
@@ -115,27 +110,19 @@ func Load(path string) error {
 			return nil
 		},
 		"Hosts": func(l []string) error {
-			for _, v := range l {
-				Config.Hosts = append(Config.Hosts, v)
-			}
+			Config.Hosts = append(Config.Hosts, l...)
 			return nil
 		},
 		"Unhosts": func(l []string) error {
-			for _, v := range l {
-				Config.Unhosts = append(Config.Unhosts, v)
-			}
+			Config.Unhosts = append(Config.Unhosts, l...)
 			return nil
 		},
 		"Regexps": func(l []string) error {
-			for _, v := range l {
-				Config.Regexps = append(Config.Regexps, v)
-			}
+			Config.Regexps = append(Config.Regexps, l...)
 			return nil
 		},
 		"Unregexps": func(l []string) error {
-			for _, v := range l {
-				Config.Unregexps = append(Config.Unregexps, v)
-			}
+			Config.Unregexps = append(Config.Unregexps, l...)
 			return nil
 		},
 		"Surrogates": func(l []string) error {

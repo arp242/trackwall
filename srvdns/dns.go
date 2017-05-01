@@ -27,14 +27,14 @@ var (
 	dnsForward string
 	dnsCache   int64
 	httpAddr   string
-	verbose    bool
+	verbose    int64
 )
 
 // Serve DNS requests.
 //
 // TODO: Splitting out the binding of the socket and starting a server is not
 // easy with the dns API, so we don't for now.
-func Serve(addr string, fwd string, cache int64, http string, v bool) (*dns.Server, *dns.Server) {
+func Serve(addr string, fwd string, cache int64, http string, v int64) (*dns.Server, *dns.Server) {
 	dnsForward = fwd
 	dnsCache = cache
 	httpAddr = http
@@ -193,7 +193,7 @@ func checkOverride(name string) bool {
 		}
 	}
 
-	// Make sure it's not expires
+	// Make sure it's not expired
 	if haveOverride {
 		if time.Now().Unix() > expires {
 			cfg.Override.Delete(name)
@@ -203,8 +203,8 @@ func checkOverride(name string) bool {
 	return haveOverride
 }
 
-// Spoof DNS response by replying with the address of our HTTP server. This only
-// does A records.
+// Spoof DNS response by replying with the address of our HTTP server.
+// This only does A records.
 func spoof(name string, w dns.ResponseWriter, req *dns.Msg) {
 	spec := fmt.Sprintf("%s. 1 IN A %s", name, httpAddr)
 	rr, err := dns.NewRR(spec)
@@ -243,31 +243,14 @@ func sendSpoof(answer []dns.RR, w dns.ResponseWriter, req *dns.Msg) {
 	}
 }
 
-// Forward DNS request to forward-dns
+// Forward the DNS request req to the server at addr and send the answer back to
+// the client.
 func forward(addr string, w dns.ResponseWriter, req *dns.Msg) {
 	transport := "udp"
 	if _, ok := w.RemoteAddr().(*net.TCPAddr); ok {
 		transport = "tcp"
 	}
 
-	// TODO: smtp.office365.com fails when using from Go:
-	//
-	//    conn, err := smtp.Dial("smtp.office365.com:587")
-	//    fmt.Println(conn, err)
-	//    <nil> dial tcp: lookup smtp.office365.com on 127.0.0.53:53: read udp 127.0.0.1:50259->127.0.0.53:53: i/o timeout
-	//
-	// Sometimes I get:
-	//
-	//     warn dns.go:269       unable to forward DNS request for {smtp.office365.com. 28 1} to 127.0.0.1:53: dns: failed to unpack truncated message
-	//
-	// But not always ... drill also works...
-
-	if req.Question[0].Name == "smtp.office365.com." {
-		fmt.Println(transport)
-		fmt.Println("Request:")
-		fmt.Println(req)
-		fmt.Println("END END END")
-	}
 	c := &dns.Client{Net: transport}
 	resp, _, err := c.Exchange(req, addr)
 	if err != nil {
@@ -277,12 +260,6 @@ func forward(addr string, w dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 
-	if req.Question[0].Name == "smtp.office365.com." {
-		fmt.Println(w.LocalAddr(), w.RemoteAddr())
-		fmt.Println("RESPONSE")
-		fmt.Println(resp)
-		fmt.Println("END END END")
-	}
 	err = w.WriteMsg(resp)
 	if err != nil {
 		msg.Warn(fmt.Errorf("unable to write DNS request for %v to %v: %v",

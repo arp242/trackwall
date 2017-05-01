@@ -13,7 +13,7 @@ var _usage = map[string]string{
 	// Global opts
 	"global_opts": `
 Global arguments:
-    -v        Verbose output
+    -v        Verbose output; use twice for debug output
     -h        Show help
     -f path   Path to the configuration file
 
@@ -167,12 +167,12 @@ Commands:
 func Process(args []string) (
 	words []string,
 	config string,
-	verbose bool,
+	verbose int64,
 	err error,
 ) {
 	opts, words, err := getopt(args, "")
 	if err != nil {
-		return nil, "", false, err
+		return nil, "", 0, err
 	}
 
 	showHelp := false
@@ -183,7 +183,7 @@ func Process(args []string) (
 		case "-f":
 			config = arg
 		case "-v":
-			verbose = true
+			verbose++
 		}
 	}
 

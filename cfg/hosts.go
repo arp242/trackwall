@@ -3,11 +3,8 @@ package cfg
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
-
-	"arp242.net/trackwall/msg"
 )
 
 // HostList is a static hosts added with hostlist/host. The key is the
@@ -35,6 +32,40 @@ func (l *HostList) Get(k string) (string, bool) {
 	return v, ok
 }
 
+// Add hosts.
+func (l *HostList) Add(hosts ...string) {
+	l.Lock()
+	defer l.Unlock()
+
+	for _, host := range hosts {
+		if strings.HasPrefix(host, "www.") {
+			host = strings.Replace(host, "www.", "", 1)
+		}
+
+		// We already got this
+		if _, has := l.m[host]; has {
+			return
+		}
+		l.m[host] = ""
+	}
+}
+
+// SetScript sets the surrogate script for a host.
+func (l *HostList) SetScript(host, script string) {
+	l.Lock()
+	defer l.Unlock()
+	l.m[host] = script
+}
+
+// Remove hosts.
+func (l *HostList) Remove(hosts ...string) {
+	l.Lock()
+	defer l.Unlock()
+	for _, host := range hosts {
+		delete(l.m, host)
+	}
+}
+
 // Len returns the length of the map.
 func (l *HostList) Len() int {
 	l.Lock()
@@ -56,88 +87,9 @@ func (l *HostList) Dump(w io.Writer) {
 	}
 }
 
-// Add host to _hosts
-func (s *ConfigT) addHost(name string) {
-	// Remove www.
-	if strings.HasPrefix(name, "www.") {
-		name = strings.Replace(name, "www.", "", 1)
-	}
-
-	// TODO: For some reason this happens sometimes. Find the source and fix
-	// properly.
-	if name == "" {
-		return
-	}
-
-	// We already got this
-	Hosts.Lock()
-	defer Hosts.Unlock()
-	if _, has := Hosts.m[name]; has {
-		return
-	}
-	Hosts.m[name] = ""
-}
-
-// Remove host from _hosts
-func (s *ConfigT) removeHost(v string) {
-	Hosts.Lock()
-	delete(Hosts.m, v)
-	Hosts.Unlock()
-}
-
 // Purge the entire list
 func (l *HostList) Purge() {
 	l.Lock()
 	l.m = make(map[string]string)
 	l.Unlock()
-}
-
-// Compile all the sources in one file, saves some memory and makes lookups a
-// bit faster
-func (s *ConfigT) Compile() {
-	newHosts := make(map[string]string)
-
-	Hosts.Lock()
-	defer Hosts.Unlock()
-
-outer:
-	for name := range Hosts.m {
-		labels := strings.Split(name, ".")
-
-		// This catches adding "s8.addthis.com" while "addthis.com" is in the list
-		c := ""
-		l := len(labels)
-		for i := 0; i < l; i++ {
-			if c == "" {
-				c = labels[l-i-1]
-			} else {
-				c = labels[l-i-1] + "." + c
-			}
-
-			_, have := newHosts[c]
-			if have {
-				continue outer
-			}
-		}
-
-		// This catches adding "addthis.com" while "s7.addthis.com" is in the list;
-		// in which case we want to remove the former.
-		for host := range newHosts {
-			if strings.HasSuffix(host, name) {
-				delete(newHosts, name)
-			}
-		}
-
-		newHosts[name] = ""
-	}
-
-	fp, err := os.Create("/cache/compiled")
-	msg.Fatal(err)
-	defer func() { _ = fp.Close() }()
-	for k := range newHosts {
-		_, err = fp.WriteString(fmt.Sprintf("%v\n", k))
-		msg.Fatal(err)
-	}
-
-	fmt.Printf("Compiled %v hosts to %v entries\n", len(Hosts.m), len(newHosts))
 }

@@ -5,8 +5,6 @@ import (
 	"io"
 	"regexp"
 	"sync"
-
-	"arp242.net/trackwall/msg"
 )
 
 // RegexpList is a list of all regexp blocks.
@@ -32,6 +30,31 @@ func (l *RegexpList) Len() int {
 	l.Lock()
 	defer l.Unlock()
 	return len(l.l)
+}
+
+// Add regexps.
+func (l *RegexpList) Add(regexps ...string) {
+	l.Lock()
+	l.Unlock()
+
+	for _, re := range regexps {
+		l.l = append(l.l, regexp.MustCompile(re))
+	}
+}
+
+// Remove regexps.
+func (l *RegexpList) Remove(regexps ...string) {
+	l.Lock()
+	defer l.Unlock()
+
+	for _, re := range regexps {
+		for i, r := range l.l {
+			if r.String() == re {
+				l.l = append(l.l[:i], l.l[i+1:]...)
+				break
+			}
+		}
+	}
 }
 
 // Match the name against all the regexps.
@@ -61,25 +84,4 @@ func (l *RegexpList) Purge() {
 	l.Lock()
 	l.l = []*regexp.Regexp{}
 	l.Unlock()
-}
-
-// Add regexp
-func (s *ConfigT) addRegexp(v string) {
-	c, err := regexp.Compile(v)
-	msg.Fatal(err)
-	Regexps.Lock()
-	Regexps.l = append(Regexps.l, c)
-	Regexps.Unlock()
-}
-
-// Remove regexp
-func (s *ConfigT) removeRegexp(v string) {
-	Regexps.Lock()
-	defer Regexps.Unlock()
-	for i, r := range Regexps.l {
-		if r.String() == v {
-			Regexps.l = append(Regexps.l[:i], Regexps.l[i+1:]...)
-			return
-		}
-	}
 }

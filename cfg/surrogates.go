@@ -63,33 +63,32 @@ func (l *SurrogateList) Purge() {
 	l.Unlock()
 }
 
-// "Compile" a surrogate into the config.hosts array. This uses a bit more memory,
-// but saves a lot of regexp checks later.
-func (s *ConfigT) compileSurrogate(reg string, sur string) {
-	sur = strings.Replace(sur, "@@", "function(){}", -1)
-	//info(fmt.Sprintf("compiling surrogate %s -> %s", reg, sur[:40]))
+// Add new surrogates. The first list entry is the host regexp, the second the
+// script.
+func (l *SurrogateList) Add(scripts ...[]string) {
+	l.Lock()
+	defer l.Unlock()
 
-	c, err := regexp.Compile(reg)
+	for _, v := range scripts {
+		reg := v[0]
+		sur := v[1]
+		sur = strings.Replace(sur, "@@", "function(){}", -1)
 
-	Surrogates.Lock()
-	Surrogates.l = append(Surrogates.l, SurrogateEntry{c, sur})
-	Surrogates.Unlock()
+		re := regexp.MustCompile(reg)
+		Surrogates.l = append(Surrogates.l, SurrogateEntry{re, sur})
 
-	msg.Fatal(err)
-
-	found := 0
-	Hosts.Lock()
-	defer Hosts.Unlock()
-	for host := range Hosts.m {
-		if c.MatchString(host) {
-			found++
-			//info(fmt.Sprintf("  adding for %s", host))
-			Hosts.m[host] = sur
+		// Add to the hosts; bit more memory/expensive now, but saves a lot of
+		// regexp checks later on.
+		found := 0
+		for host := range Hosts.m {
+			if re.MatchString(host) {
+				found++
+				Hosts.SetScript(host, sur)
+			}
 		}
-	}
 
-	if found > 50 {
-		msg.Warn(fmt.Errorf("the surrogate %s matches %d hosts. Are you sure this is correct?",
-			reg, found))
+		if found > 50 {
+			msg.Warn(fmt.Errorf("the surrogate %s matches %d hosts", reg, found))
+		}
 	}
 }

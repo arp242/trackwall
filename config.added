@@ -1,116 +1,18 @@
+# vim:ft=config
 # This is a list of hosts I found which are *not* in the other hostlists.
 
-
-# TODO: Why?!
-# info dns.go:67        forward  gy.symcd.com
-#
-# ./trackwall status hosts|grep symcb
-# symcb.com
-
-
-
-# https://www.dfa.ie/travel/citizens-registration/citizens-registration-form/
-host symcd.com
-
-# arstechnica.co.uk
 host
-	api.parsely.com  # A comment
-	symcb.com        # Another!
-	symcd.com        # Another!
-
-# arstechnica.co.uk, vk.nl
-#host symcb.com
-
-
-#http://creativity.condenast.com/
-#api.sociuslive.com
-#avatars.io
-
-# what.cd
-host marketo.com
-
-# nrc.nl
-host adhese.com
-
-# vk.nl
-host
-	script.shoppingminds.com
+	api.parsely.com          # arstechnica.co.uk
+	symcb.com
+	symcd.com
+	marketo.com              # what.cd
+	adhese.com               # nrc.nl
+	shoppingminds.com        # vk.nl
 	worldgravity.com
 	gravityrd-services.com
-
-#info dns.go:67        forward  gn.symcd.com
-
-#www.budgetedbauer.com
-
-
-# I forgot where I found these
-host
 	adnxs.com
-
-# vk.nl
-# forward  persgroep-ams.gravityrd-services.com
-#
-# stackoverflow.com
-# forward  ssum-sec.casalemedia.com
-
-# reddit.com
-#info dns.go:68        forward  s.zkcdn.net
-
-
-#www.dyson.co.uk and www.dyson.com
-#edge.api.brightcove.com
-#brightcove.vo.llnwd.net
-#c.brightcove.com
-#players.brightcove.net
-
-#reddit.com
-#info dns.go:74        spoof    pixel.redditmedia.com
-#info dns.go:68        forward  www.redditmedia.com
-#info dns.go:68        forward  s.zkcdn.net
-
-# ed.nl
-#info dns.go:68        forward  ed.nl
-#info dns.go:68        forward  ed.nl
-#info dns.go:68        forward  www.ed.nl
-#info dns.go:68        forward  www.ed.nl
-#info dns.go:68        forward  edprojecten.nl
-#info dns.go:68        forward  edprojecten.nl
-#info dns.go:74        spoof    www.synovite-scripts.com
-#info dns.go:68        forward  www.mensenlinq.nl
-#info dns.go:68        forward  www.mensenlinq.nl
-#info dns.go:68        forward  instansive.com
-#info dns.go:68        forward  instansive.com
-#info dns.go:74        spoof    platform.twitter.com
-#info dns.go:68        forward  lightwidget.com
-#info dns.go:68        forward  lightwidget.com
-#info dns.go:68        forward  scontent.cdninstagram.com
-#info dns.go:68        forward  scontent.cdninstagram.com
-
-#http://www.janlinders.nl/
-#info dns.go:68        forward  cdn.feedbackify.com
-#info dns.go:68        forward  cdnjs.cloudflare.com
-#
-
-#http://explosm.net/comics/4282/
-#cms.c1exchange.com
-#info dns.go:68        forward  propermedia-d.openx.net
-#info dns.go:68        forward  propermedia-d.openx.net
-#info dns.go:68        forward  s6-pixel.c1exchange.com
-#info dns.go:68        forward  s6-pixel.c1exchange.com
-#
-
-# Facebook tracker
-host connect.facebook.net
-
-# Don't need all the intercom crap
-host intercom.io intercomcdn.com
-
-# Some markething crap
-# https://cookiepedia.co.uk/host/ic-live.com
-host ic-live.com
-
-# Some analytics crap
-host cdn.segment.com
-
-
-# vim:ft=config
+	connect.facebook.net     # Facebook tracker
+	intercom.io              # Don't need all the intercom crap
+	intercomcdn.com
+	ic-live.com              # Some markething crap; https://cookiepedia.co.uk/host/ic-live.com
+	cdn.segment.com          # Some analytics crap

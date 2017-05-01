@@ -28,7 +28,7 @@ func main() {
 	}
 	commands, config, verbose, err := cmdline.Process(os.Args[1:])
 	msg.Fatal(err)
-	cfg.Verbose = verbose
+	cfg.Config.Verbose = verbose
 	if len(commands) == 0 {
 		cmdline.Usage("global", "")
 		os.Exit(0)
@@ -109,7 +109,7 @@ func listen() {
 	http, https := srvhttp.Bind()
 	dnsUDP, dnsTCP := srvdns.Serve(cfg.Config.DNSListen.String(),
 		cfg.Config.DNSForward.String(), cfg.Config.CacheDNS, cfg.Config.HTTPListen.Host,
-		cfg.Verbose)
+		cfg.Config.Verbose)
 	defer dnsUDP.Shutdown()
 	defer dnsTCP.Shutdown()
 
@@ -127,7 +127,7 @@ func listen() {
 	// add hosts from remote sources (and thus needs DNS)
 	cfg.Config.ReadHosts()
 
-	msg.Info("initialisation finished; ready to serve", cfg.Verbose)
+	msg.Info("initialisation finished; ready to serve", cfg.Config.Verbose)
 
 	// Wait for SIGINT or SIGTERM
 	sigs := make(chan os.Signal, 1)
@@ -137,7 +137,7 @@ func listen() {
 
 // Setup chroot() from the information in cfg.Config
 func chroot() {
-	msg.Info(fmt.Sprintf("chrooting to %v", cfg.Config.Chroot), cfg.Verbose)
+	msg.Info(fmt.Sprintf("chrooting to %v", cfg.Config.Chroot), cfg.Config.Verbose)
 
 	// Make sure the chroot dir exists with the correct permissions and such
 	_, err := os.Stat(cfg.Config.Chroot)
@@ -211,7 +211,7 @@ func DropPrivs() {
 		return
 	}
 
-	msg.Info("dropping privileges", cfg.Verbose)
+	msg.Info("dropping privileges", cfg.Config.Verbose)
 
 	err := syscall.Setresgid(cfg.Config.User.GID, cfg.Config.User.GID, cfg.Config.User.GID)
 	msg.Fatal(err)

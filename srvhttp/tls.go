@@ -58,7 +58,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	}
 
 	// We can now use the files to make a TLS certificate
-	msg.Debug(fmt.Sprintf("tls %s, %s", certfile, keyfile))
+	msg.Debug(fmt.Sprintf("tls %s, %s", certfile, keyfile), cfg.Config.Verbose)
 	//tlscert, err := tls.LoadX509KeyPair(certfile, keyfile)
 	tlscert, err := tls.LoadX509KeyPair(certfile, cfg.Config.RootKey)
 	if err != nil {
@@ -72,7 +72,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 // Make a key
 // openssl genrsa -out s7.addthis.com.key 2048
 func makeKey(name, keyfile string) error {
-	msg.Debug("    Making a key for " + name)
+	msg.Debug("    Making a key for "+name, cfg.Config.Verbose)
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func makeKey(name, keyfile string) error {
 // Make a csr
 // openssl req -new -key s7.addthis.com.key -out s7.addthis.com.csr
 func makeCSR(name, keyfile, csrfile string) error {
-	msg.Debug("    Making a csr for " + name)
+	msg.Debug("    Making a csr for "+name, cfg.Config.Verbose)
 	template := x509.CertificateRequest{}
 
 	if ip := net.ParseIP(name); ip != nil {
@@ -124,7 +124,7 @@ func makeCSR(name, keyfile, csrfile string) error {
 // Make a cert
 // openssl x509 -req -in s7.addthis.com.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out s7.addthis.com.crt -days 500 -sha256
 func makeCert(name, certfile string) error {
-	msg.Debug("    Making a cert for " + name)
+	msg.Debug("    Making a cert for "+name, cfg.Config.Verbose)
 
 	// Load root CA
 	fp, err := os.Open(cfg.Config.RootCert)
