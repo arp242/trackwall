@@ -12,7 +12,17 @@ host
 	gravityrd-services.com
 	adnxs.com
 	connect.facebook.net     # Facebook tracker
-	intercom.io              # Don't need all the intercom crap
-	intercomcdn.com
 	ic-live.com              # Some markething crap; https://cookiepedia.co.uk/host/ic-live.com
 	cdn.segment.com          # Some analytics crap
+
+host
+	accounts.google.com      # Don't need google
+	clients1.google.com
+	googleapis.com
+	getdrip.com              # Marketing
+	providesupport.com       # Annoying services I don't need
+	abtasty.com
+	intercom.io
+	intercomcdn.com
+	adobe.com                # Hmm..
+	adobelogin.com

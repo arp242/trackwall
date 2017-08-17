@@ -26,9 +26,9 @@ go install arp242.net/trackwall
 
 echo "Installing $prefix/sbin/$name"
 # TODO: re-exec after go install with sudo
-$sudo install "$GOPATH/bin/$name" "$prefix/sbin/$name"
+$sudo install "$(which trackwall)" "$prefix/sbin/$name" ||:
 
-[ -e "$etcdir/$name" ] || mkdir -pv "$etcdir/$name"
+[ -e "$etcdir/$name" ] || sudo mkdir -pv "$etcdir/$name"
 for f in config*; do
 	if [ ! -e "$etcdir/$name/$f" ]; then
 		echo "Installing $etcdir/$name/$f"

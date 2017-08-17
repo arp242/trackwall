@@ -33,22 +33,6 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		return nil, err
 	}
 
-	keyfile := fmt.Sprintf("/cache/certs/%s.key", name)
-	if _, err := os.Stat(keyfile); os.IsNotExist(err) {
-		err := makeKey(name, keyfile)
-		if err != nil {
-			return nil, fmt.Errorf("cannot make key: %v", err)
-		}
-	}
-
-	csrfile := fmt.Sprintf("/cache/certs/%s.csr", name)
-	if _, err := os.Stat(csrfile); os.IsNotExist(err) {
-		err := makeCSR(name, keyfile, csrfile)
-		if err != nil {
-			return nil, fmt.Errorf("cannot make CSR: %v", err)
-		}
-	}
-
 	certfile := fmt.Sprintf("/cache/certs/%s.crt", name)
 	if _, err := os.Stat(certfile); os.IsNotExist(err) {
 		err := makeCert(name, certfile)
@@ -58,8 +42,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	}
 
 	// We can now use the files to make a TLS certificate
-	msg.Debug(fmt.Sprintf("tls %s, %s", certfile, keyfile), cfg.Config.Verbose)
-	//tlscert, err := tls.LoadX509KeyPair(certfile, keyfile)
+	msg.Debug(fmt.Sprintf("tls %s", certfile), cfg.Config.Verbose)
 	tlscert, err := tls.LoadX509KeyPair(certfile, cfg.Config.RootKey)
 	if err != nil {
 		msg.Warn(err)
@@ -69,60 +52,7 @@ func getCert(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	return &tlscert, nil
 }
 
-// Make a key
-// openssl genrsa -out s7.addthis.com.key 2048
-func makeKey(name, keyfile string) error {
-	msg.Debug("    Making a key for "+name, cfg.Config.Verbose)
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return err
-	}
-
-	fp, err := os.Create(keyfile)
-	if err != nil {
-		return err
-	}
-
-	err = pem.Encode(fp, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	if err != nil {
-		return err
-	}
-
-	_ = fp.Close()
-	return nil
-}
-
-// Make a csr
-// openssl req -new -key s7.addthis.com.key -out s7.addthis.com.csr
-func makeCSR(name, keyfile, csrfile string) error {
-	msg.Debug("    Making a csr for "+name, cfg.Config.Verbose)
-	template := x509.CertificateRequest{}
-
-	if ip := net.ParseIP(name); ip != nil {
-		template.IPAddresses = append(template.IPAddresses, ip)
-	} else {
-		template.DNSNames = append(template.DNSNames, name)
-	}
-
-	fp, err := os.Open(keyfile)
-	data, err := ioutil.ReadAll(fp)
-	keypem, _ := pem.Decode(data)
-	fp.Close()
-	key, err := x509.ParsePKCS1PrivateKey(keypem.Bytes)
-
-	csr, err := x509.CreateCertificateRequest(rand.Reader, &template, key)
-	fp, err = os.Create(csrfile)
-	if err != nil {
-		return err
-	}
-
-	pem.Encode(fp, &pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr})
-	fp.Close()
-	return nil
-}
-
 // Make a cert
-// openssl x509 -req -in s7.addthis.com.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out s7.addthis.com.crt -days 500 -sha256
 func makeCert(name, certfile string) error {
 	msg.Debug("    Making a cert for "+name, cfg.Config.Verbose)
 
@@ -186,7 +116,6 @@ func makeCert(name, certfile string) error {
 }
 
 // MakeRootKey makes a new root key.
-// openssl genrsa -out /var/trackwall/rootCA.key 2048
 // NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
 func MakeRootKey() {
 	msg.Warn(fmt.Errorf("generating a new root key at %s", cfg.Config.RootKey))
@@ -206,7 +135,6 @@ func MakeRootKey() {
 }
 
 // MakeRootCert makes a new root certificate.
-// openssl req -x509 -new -nodes -key /var/trackwall/rootCA.key -sha256 -days 1024 -out /var/trackwall/rootCA.pem
 // NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
 func MakeRootCert() {
 	msg.Warn(fmt.Errorf("generating a new root certificate at %s", cfg.Config.RootCert))
@@ -215,9 +143,13 @@ func MakeRootCert() {
 	p := cfg.Config.ChrootDir(cfg.Config.RootCert)
 
 	fp, err := os.Open(key)
+	msg.Fatal(err)
+	defer fp.Close()
+
 	data, err := ioutil.ReadAll(fp)
+	msg.Fatal(err)
+
 	rootpem, _ := pem.Decode(data)
-	fp.Close()
 	rootkey, err := x509.ParsePKCS1PrivateKey(rootpem.Bytes)
 	msg.Fatal(err)
 
@@ -236,12 +168,12 @@ func MakeRootCert() {
 
 	cert, err := x509.CreateCertificate(rand.Reader, &template, &template, &rootkey.PublicKey, rootkey)
 	msg.Fatal(err)
+
 	fp, err = os.Create(p)
 	msg.Fatal(err)
+	defer fp.Close()
 
 	pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
-	fp.Close()
-
 	msg.Fatal(os.Chmod(p, os.FileMode(0600)))
 }
 

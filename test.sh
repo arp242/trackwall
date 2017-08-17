@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -euC
 
@@ -27,7 +27,7 @@ for pkg in $(go list ./... | grep -v /vendor/); do
 		-covermode=atomic \
 		-coverprofile=coverage.tmp \
 		-coverpkg=$(find_deps "$pkg") \
-		"$pkg"
+		"$pkg" 2>&1 | grep -v 'warning: no packages being tested depend on '
 
 	if [ -f coverage.tmp ]; then
 		tail -n+2 coverage.tmp >> coverage.txt
@@ -35,5 +35,4 @@ for pkg in $(go list ./... | grep -v /vendor/); do
 	fi
 done
 
-[ -n "${TRAVIS:-}" ] && bash <(curl -s https://codecov.io/bash)
-#rm coverage.txt
+[ -n "${TRAVIS:-}" ] && curl -s https://codecov.io/bash | bash
