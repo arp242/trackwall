@@ -1,20 +1,53 @@
 // Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-// DNS proxy to spoof responses in order to block ads and malicious websites.
-package main
+package cmd
 
 import (
+	"fmt"
 	"os"
 
-	"arp242.net/trackwall/cmd"
+	"arp242.net/sconfig"
+	"arp242.net/trackwall/cfg"
 	"arp242.net/trackwall/msg"
+	"github.com/spf13/cobra"
 )
 
-func main() {
-	if err := cmd.RootCmd.Execute(); err != nil {
-		msg.Fatal(err)
+var cfgFile string
+
+// RootCmd represents the base command when called without any subcommands.
+var RootCmd = &cobra.Command{
+	Use:   "trackwall", // TODO: os.Args[0]?
+	Short: "",
+	Long:  "",
+}
+
+// Execute adds all child commands to the root command and sets flags appropriately.
+// This is called by main.main(). It only needs to happen once to the rootCmd.
+func Execute() {
+	if err := RootCmd.Execute(); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
+	}
+}
+
+func init() {
+	cobra.OnInitialize(initConfig)
+
+	RootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "",
+		"Path to the configuration file")
+	RootCmd.PersistentFlags().CountVarP(&cfg.Config.Verbose, "verbose", "v",
+		"Verbose output; use twice for debug output")
+}
+
+func initConfig() {
+	if cfgFile == "" {
+		cfgFile = sconfig.FindConfig("trackwall/config")
+	}
+
+	err := cfg.Load(cfgFile)
+	if err != nil {
+		msg.Fatal(fmt.Errorf("cannot load config: %v", err))
 	}
 }
 

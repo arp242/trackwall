@@ -1,21 +1,25 @@
 // Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-// DNS proxy to spoof responses in order to block ads and malicious websites.
-package main
+package cmd
 
-import (
-	"os"
+import "github.com/spf13/cobra"
 
-	"arp242.net/trackwall/cmd"
-	"arp242.net/trackwall/msg"
+var (
+	cacheCmd = &cobra.Command{
+		Use:   "cache",
+		Short: "Control cache",
+	}
+	cacheFlushCmd = &cobra.Command{
+		Use:   "flush",
+		Short: "Flush all cache",
+		Run:   sendCmd,
+	}
 )
 
-func main() {
-	if err := cmd.RootCmd.Execute(); err != nil {
-		msg.Fatal(err)
-		os.Exit(1)
-	}
+func init() {
+	RootCmd.AddCommand(cacheCmd)
+	cacheCmd.AddCommand(cacheFlushCmd)
 }
 
 // The MIT License (MIT)

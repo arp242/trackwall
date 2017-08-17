@@ -28,7 +28,7 @@ type ConfigT struct {
 	CacheHosts    int64
 	CacheDNS      int64
 	Color         bool
-	Verbose       int64
+	Verbose       int
 
 	// A list of the various sources; this only contains the hosts defined with
 	// the "host" keyword in the config.

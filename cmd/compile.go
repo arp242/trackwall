@@ -1,21 +1,46 @@
 // Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-// DNS proxy to spoof responses in order to block ads and malicious websites.
-package main
+package cmd
 
 import (
 	"os"
 
-	"arp242.net/trackwall/cmd"
-	"arp242.net/trackwall/msg"
+	"arp242.net/trackwall/cfg"
+	"github.com/spf13/cobra"
 )
 
-func main() {
-	if err := cmd.RootCmd.Execute(); err != nil {
-		msg.Fatal(err)
-		os.Exit(1)
-	}
+var compileCmd = &cobra.Command{
+	Use:   "compile",
+	Short: "Compile the host list",
+	Long: `
+Compile all the hosts (as added with hostlist, host, unhostlist, and unhost in
+the configuration file) to one "compiled" file with duplicates and redundant
+entries removed. trackwall doesn't do this automatically on startup since this
+is a comparatively expensive operation.
+
+You don't strictly need to do this, but it will make the program start up and
+run a bit faster.
+
+The result is written to /compiled-hosts in the chroot directory and is used
+automatically if its mtime is not older than cache-hosts. If it's older
+trackwall will show a warning and ignore the file.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		compile()
+	},
+}
+
+func init() {
+	RootCmd.AddCommand(compileCmd)
+}
+
+func compile() {
+	chroot()
+	DropPrivs()
+
+	os.Remove("/cache/compiled")
+	cfg.Config.ReadHosts()
+	cfg.Config.Compile()
 }
 
 // The MIT License (MIT)

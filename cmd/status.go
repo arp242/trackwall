@@ -1,21 +1,56 @@
 // Copyright © 2016-2017 Martin Tournoij <martin@arp242.net>
 // See the bottom of this file for the full copyright notice.
 
-// DNS proxy to spoof responses in order to block ads and malicious websites.
-package main
+package cmd
 
-import (
-	"os"
+import "github.com/spf13/cobra"
 
-	"arp242.net/trackwall/cmd"
-	"arp242.net/trackwall/msg"
+var (
+	statusCmd = &cobra.Command{
+		Use:   "status",
+		Short: "Show server status",
+		Long:  `Get status of running trackwall instance.`,
+	}
+	statusSummaryCmd = &cobra.Command{
+		Use:   "summary",
+		Short: "Show a brief summary",
+		Run:   sendCmd,
+	}
+	statusConfigCmd = &cobra.Command{
+		Use:   "config",
+		Short: "Show the configuration values",
+		Run:   sendCmd,
+	}
+	statusCacheCmd = &cobra.Command{
+		Use:   "cache",
+		Short: "Show the cache",
+		Run:   sendCmd,
+	}
+	statusHostsCmd = &cobra.Command{
+		Use:   "hosts",
+		Short: "Show hosts (may be a lot of output)",
+		Run:   sendCmd,
+	}
+	statusRegexpsCmd = &cobra.Command{
+		Use:   "regexps",
+		Short: "Show regexps",
+		Run:   sendCmd,
+	}
+	statusOverrideCmd = &cobra.Command{
+		Use:   "override",
+		Short: "Show override table",
+		Run:   sendCmd,
+	}
 )
 
-func main() {
-	if err := cmd.RootCmd.Execute(); err != nil {
-		msg.Fatal(err)
-		os.Exit(1)
-	}
+func init() {
+	RootCmd.AddCommand(statusCmd)
+	statusCmd.AddCommand(statusSummaryCmd)
+	statusCmd.AddCommand(statusConfigCmd)
+	statusCmd.AddCommand(statusCacheCmd)
+	statusCmd.AddCommand(statusHostsCmd)
+	statusCmd.AddCommand(statusRegexpsCmd)
+	statusCmd.AddCommand(statusOverrideCmd)
 }
 
 // The MIT License (MIT)

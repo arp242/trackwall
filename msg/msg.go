@@ -36,21 +36,21 @@ func Warn(err error) {
 }
 
 // Info for informational messages.
-func Info(m string, verbose int64) {
+func Info(m string, verbose int) {
 	if verbose > 0 {
 		msg("info", m, "", stdout)
 	}
 }
 
 // Infoc are informational messages in colour.
-func Infoc(m, color string, verbose int64) {
+func Infoc(m, color string, verbose int) {
 	if verbose > 0 {
 		msg("info", m, color, stdout)
 	}
 }
 
 // Debug messages.
-func Debug(m string, verbose int64) {
+func Debug(m string, verbose int) {
 	if verbose > 1 {
 		msg("debug", m, "", stdout)
 	}

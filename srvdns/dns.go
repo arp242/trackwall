@@ -27,14 +27,14 @@ var (
 	dnsForward string
 	dnsCache   int64
 	httpAddr   string
-	verbose    int64
+	verbose    int
 )
 
 // Serve DNS requests.
 //
 // TODO: Splitting out the binding of the socket and starting a server is not
 // easy with the dns API, so we don't for now.
-func Serve(addr string, fwd string, cache int64, http string, v int64) (*dns.Server, *dns.Server) {
+func Serve(addr string, fwd string, cache int64, http string, v int) (*dns.Server, *dns.Server) {
 	dnsForward = fwd
 	dnsCache = cache
 	httpAddr = http
