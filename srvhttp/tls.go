@@ -21,6 +21,9 @@ import (
 	"arp242.net/trackwall/msg"
 )
 
+// 39 months is the maximum validity for a certificate.
+var certValidity = time.Hour * 24 * 30 * 38
+
 // Generate a certificate for the domain
 // TODO: This can be a lot more efficient.
 // TODO: certs written out are world-readable
@@ -87,9 +90,8 @@ func makeCert(name, certfile string) error {
 			CommonName:   "trackwall root",
 			Organization: []string{"trackwall"},
 		},
-		NotBefore: time.Now().Add(-24 * time.Hour),
-		NotAfter:  time.Now().Add(24 * time.Hour * 365 * 10),
-
+		NotBefore:             time.Now().Add(-24 * time.Hour),
+		NotAfter:              time.Now().Add(certValidity),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -161,7 +163,7 @@ func MakeRootCert() {
 			Organization: []string{"trackwall root"},
 		},
 		NotBefore:             time.Now().Add(-24 * time.Hour),
-		NotAfter:              time.Now().Add(24 * time.Hour * 365 * 10),
+		NotAfter:              time.Now().Add(certValidity),
 		BasicConstraintsValid: true,
 		IsCA: true,
 	}
