@@ -61,9 +61,19 @@ func makeCert(name, certfile string) error {
 
 	// Load root CA
 	fp, err := os.Open(cfg.Config.RootCert)
+	if err != nil {
+		return err
+	}
 	data, err := ioutil.ReadAll(fp)
+	if err != nil {
+		return err
+	}
 	rootpem, _ := pem.Decode(data)
-	fp.Close()
+	err = fp.Close()
+	if err != nil {
+		return err
+	}
+
 	rootcerts, err := x509.ParseCertificates(rootpem.Bytes)
 	if err != nil {
 		msg.Warn(err)
@@ -73,9 +83,19 @@ func makeCert(name, certfile string) error {
 
 	// Load root key
 	fp, err = os.Open(cfg.Config.RootKey)
+	if err != nil {
+		return err
+	}
 	data, err = ioutil.ReadAll(fp)
+	if err != nil {
+		return err
+	}
 	rootpem, _ = pem.Decode(data)
-	fp.Close()
+	err = fp.Close()
+	if err != nil {
+		return err
+	}
+
 	rootkey, err := x509.ParsePKCS1PrivateKey(rootpem.Bytes)
 	if err != nil {
 		msg.Warn(err)
@@ -84,6 +104,10 @@ func makeCert(name, certfile string) error {
 
 	// Make cert
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return err
+	}
+
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
@@ -112,14 +136,17 @@ func makeCert(name, certfile string) error {
 		return err
 	}
 
-	pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
-	_ = fp.Close()
-	return nil
+	err = pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	if err != nil {
+		return err
+	}
+
+	return fp.Close()
 }
 
 // MakeRootKey makes a new root key.
 // NOTE: Assumes that it is run *BEFORE* chroot(). See chroot() in main.go
-func MakeRootKey() {
+func MakeRootKey() error {
 	msg.Warn(fmt.Errorf("generating a new root key at %s", cfg.Config.RootKey))
 
 	p := cfg.Config.ChrootDir(cfg.Config.RootKey)
@@ -130,10 +157,17 @@ func MakeRootKey() {
 	fp, err := os.Create(p)
 	msg.Fatal(err)
 
-	pem.Encode(fp, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	fp.Close()
+	err = pem.Encode(fp, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	if err != nil {
+		return err
+	}
 
-	msg.Fatal(os.Chmod(p, os.FileMode(0600)))
+	err = fp.Close()
+	if err != nil {
+		return err
+	}
+
+	return os.Chmod(p, os.FileMode(0600))
 }
 
 // MakeRootCert makes a new root certificate.
@@ -146,7 +180,7 @@ func MakeRootCert() {
 
 	fp, err := os.Open(key)
 	msg.Fatal(err)
-	defer fp.Close()
+	defer fp.Close() // nolint :errcheck
 
 	data, err := ioutil.ReadAll(fp)
 	msg.Fatal(err)
@@ -156,6 +190,8 @@ func MakeRootCert() {
 	msg.Fatal(err)
 
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	msg.Fatal(err)
+
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
@@ -173,20 +209,26 @@ func MakeRootCert() {
 
 	fp, err = os.Create(p)
 	msg.Fatal(err)
-	defer fp.Close()
+	defer fp.Close() // nolint: errcheck
 
-	pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	err = pem.Encode(fp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	if err != nil {
+		msg.Fatal(err)
+	}
+
 	msg.Fatal(os.Chmod(p, os.FileMode(0600)))
 }
 
 // Install in system
 //
-// http://kb.kerio.com/product/kerio-connect/server-configuration/ssl-certificates/adding-trusted-root-certificates-to-the-server-1605.html
+// http://kb.kerio.com/product/kerio-connect/server-configuration/ssl-certificates/
+// adding-trusted-root-certificates-to-the-server-1605.html
 //
 // update-ca-trust force-enable
 // ln -s /var/trackwall/rootCA.pem /etc/ca-certificates/trust-source/anchors/
 // update-ca-trust extract
 //
+// nolint: megacheck
 func installRootCert() {
 }
 

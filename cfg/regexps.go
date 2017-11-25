@@ -35,7 +35,7 @@ func (l *RegexpList) Len() int {
 // Add regexps.
 func (l *RegexpList) Add(regexps ...string) {
 	l.Lock()
-	l.Unlock()
+	defer l.Unlock()
 
 	for _, re := range regexps {
 		l.l = append(l.l, regexp.MustCompile(re))

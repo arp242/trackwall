@@ -8,6 +8,7 @@ const (
 <li><a href="/$@_allow/1d/%[2]s">a day</a></li>
 <li><a href="/$@_allow/10y/%[2]s">until restart</a></li></ul></body></html>`
 
+	// nolint: megacheck,varcheck
 	tplList = `<html><head><title>trackwall</title></head><body><ul>
 <li><a href="/$@_list/config">config</a></li>
 <li><a href="/$@_list/hosts">hosts</a></li>
