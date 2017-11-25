@@ -8,6 +8,7 @@ notifications:
 cache:
   directories:
     - $HOME/gopath/pkg
+install: []
 script:
   - cd $HOME/gopath/src/arp242.net/trackwall
   - ./bin/test
