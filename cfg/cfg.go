@@ -36,7 +36,7 @@ func (a *AddrT) String() string {
 func (a *AddrT) set(addr string) {
 	if addr[0] != '[' && strings.Count(addr, ":") > 1 {
 		addr = fmt.Sprintf("[%v]:53", addr)
-	} else if strings.Index(addr, ":") < 0 {
+	} else if !strings.Contains(addr, ":") {
 		addr += ":53"
 	}
 
@@ -132,6 +132,7 @@ func Load(path string) error {
 	})
 }
 
+// nolint: megacheck
 func findResolver() (string, error) {
 	fp, err := os.Open("/etc/resolv.conf")
 	msg.Fatal(err)

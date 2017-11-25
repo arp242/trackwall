@@ -17,6 +17,7 @@ import (
 	"arp242.net/trackwall/srvdns"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/miekg/dns"
 )
 
 // Bind the socket.
@@ -40,8 +41,10 @@ func Serve(l net.Listener) {
 	}()
 }
 
+const needSub = "error: need a subcommand"
+
 func handleCtl(conn net.Conn) {
-	defer func() { _ = conn.Close() }()
+	defer conn.Close() // nolint: errcheck
 
 	input, isHTTP, err := readCommand(conn)
 	if err != nil {
@@ -53,26 +56,26 @@ func handleCtl(conn net.Conn) {
 	switch input[0] {
 	case "":
 		if isHTTP {
-			conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"))
+			conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n")) // nolint: errcheck
 			w = tplIndex
 		} else {
 			w = fmt.Sprintf("error: unknown command: %#v", input[0])
 		}
 	case "status":
 		if len(input) < 2 {
-			w = "error: need a subcommand"
+			w = needSub
 		} else {
 			w = handleStatus(input[1], conn)
 		}
 	case "cache":
 		if len(input) < 2 {
-			w = "error: need a subcommand"
+			w = needSub
 		} else {
 			w = handleCache(input[1], conn)
 		}
 	case "override":
 		if len(input) < 2 {
-			w = "error: need a subcommand"
+			w = needSub
 		} else {
 			w = handleOverride(input[1], conn)
 		}
@@ -97,8 +100,6 @@ func readCommand(conn io.Reader) (
 		return nil, false, err
 	}
 
-	sdata := string(data)
-
 	// This accepts simple "telnet" style commands:
 	//   status summary
 	//   host add example.com example2.com
@@ -106,13 +107,13 @@ func readCommand(conn io.Reader) (
 	// But we also accept HTTP-style:
 	//   GET /status/summary HTTP/1.1\r\n
 	//   GET /host/add/example.com/example2.com HTTP/1.1\r\n"
-	if strings.HasPrefix(sdata, "GET /") {
+	if strings.HasPrefix(data, "GET /") {
 		// Remove GET and HTTP/1.1\r\n
-		sdata = sdata[5 : len(sdata)-11]
-		input = strings.Split(strings.TrimSpace(sdata), "/")
+		data = data[5 : len(data)-11]
+		input = strings.Split(strings.TrimSpace(data), "/")
 		isHTTP = true
 	} else {
-		input = strings.Split(strings.TrimSpace(sdata), " ")
+		input = strings.Split(strings.TrimSpace(data), " ")
 	}
 
 	return input, isHTTP, nil
@@ -142,7 +143,7 @@ func handleOverride(cmd string, w net.Conn) (out string) {
 	return out
 }
 
-func handleStatus(cmd string, w net.Conn) (out string) {
+func handleStatus(cmd string, w dns.Writer) (out string) {
 	scs := spew.ConfigState{Indent: "\t"}
 
 	switch cmd {

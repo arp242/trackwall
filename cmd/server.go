@@ -49,8 +49,8 @@ func listen() {
 	dnsUDP, dnsTCP := srvdns.Serve(cfg.Config.DNSListen.String(),
 		cfg.Config.DNSForward.String(), cfg.Config.CacheDNS, cfg.Config.HTTPListen.Host,
 		cfg.Config.Verbose)
-	defer dnsUDP.Shutdown()
-	defer dnsTCP.Shutdown()
+	defer dnsUDP.Shutdown() // nolint: errcheck
+	defer dnsTCP.Shutdown() // nolint: errcheck
 
 	// Wait for the servers to start.
 	// TODO: This should be better.

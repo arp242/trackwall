@@ -44,7 +44,10 @@ func chroot() {
 	// this as a dependency).
 	// This should be fixed in Go 1.7 by using getentropy() (see #13785, #14572)
 	if _, err := os.Stat(cfg.Config.ChrootDir(cfg.Config.RootKey)); os.IsNotExist(err) {
-		srvhttp.MakeRootKey()
+		err := srvhttp.MakeRootKey()
+		if err != nil {
+			msg.Fatal(err)
+		}
 	}
 	if _, err := os.Stat(cfg.Config.ChrootDir(cfg.Config.RootCert)); os.IsNotExist(err) {
 		srvhttp.MakeRootCert()
@@ -60,8 +63,11 @@ func chroot() {
 	err = os.MkdirAll("/etc", 0755)
 	msg.Fatal(err)
 	fp, err := os.Create("/etc/resolv.conf")
-	defer fp.Close()
-	fp.Write([]byte(fmt.Sprintf("nameserver %s", cfg.Config.DNSListen.Host)))
+	msg.Fatal(err)
+	_, err = fp.Write([]byte(fmt.Sprintf("nameserver %s", cfg.Config.DNSListen.Host)))
+	msg.Fatal(err)
+	err = fp.Close()
+	msg.Fatal(err)
 
 	// Make sure the rootCA files exist and are not world-readable.
 	keyfile := func(path string) string {

@@ -49,6 +49,6 @@ func TestCacheList(t *testing.T) {
 	tt.Eq(t, "get", CacheEntry{}, e)
 	tt.Eq(t, "get", ok, false)
 
-	e, ok = l.Get("current")
+	_, ok = l.Get("current")
 	tt.Eq(t, "get", ok, true)
 }

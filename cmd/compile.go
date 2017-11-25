@@ -38,7 +38,7 @@ func compile() {
 	chroot()
 	DropPrivs()
 
-	os.Remove("/cache/compiled")
+	_ = os.Remove("/cache/compiled")
 	cfg.Config.ReadHosts()
 	cfg.Config.Compile()
 }

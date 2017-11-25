@@ -5,7 +5,7 @@
   branch = "master"
   name = "arp242.net/sconfig"
   packages = ["."]
-  revision = "f147f05d97d326119b028090b1cc5480a482d528"
+  revision = "3e81e0483e0f91c2adcf4588329a97147e1f0e5e"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -22,14 +22,14 @@
 [[projects]]
   branch = "master"
   name = "github.com/miekg/dns"
-  packages = ["."]
-  revision = "0598bd43cf51d0375c5bcd3a42e807cc19b3b7d9"
+  packages = [".","internal/socket"]
+  revision = "cdb76b64a347436f019bf96ab5eb2d74e73e964b"
 
 [[projects]]
   branch = "master"
   name = "github.com/spf13/cobra"
   packages = ["."]
-  revision = "cb731b898346822cc0c225c28550a8a29d93c732"
+  revision = "1be1d2841c773c01bee8289f55f7463b6e2c2539"
 
 [[projects]]
   name = "github.com/spf13/pflag"
