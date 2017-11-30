@@ -103,7 +103,8 @@ hostlist plain http://pgl.yoyo.org/adservers/serverlist.php?hostformat=plain&sho
 hostlist hosts http://winhelp2002.mvps.org/hosts.txt
 hostlist hosts http://someonewhocares.org/hosts/hosts
 
-# You can also use a local file; remember that trackwall uses chroot()!
+# You can also use a local file; remember that trackwall uses chroot(), and the
+# file is loaded relative to the chroot.
 #hostlist hosts file:///hosts
 
 # If you just want to block a few hosts, you can add rules here as well
@@ -124,7 +125,9 @@ hostlist hosts http://someonewhocares.org/hosts/hosts
 # up subsequent lookups though).
 #
 
-# Regexps
+# Regexps from a list; remember that trackwall uses chroot(), and the file is
+# loaded relative to the chroot.
+#
 # Only plain is supported
 #regexplist plain file:///home/martin/regexps
 

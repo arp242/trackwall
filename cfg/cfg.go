@@ -109,6 +109,18 @@ func Load(path string) error {
 			}
 			return nil
 		},
+		"Regexplists": func(l []string) error {
+			for _, v := range l[1:] {
+				Config.Regexplists = append(Config.Regexplists, []string{l[0], v})
+			}
+			return nil
+		},
+		"Unregexplists": func(l []string) error {
+			for _, v := range l[1:] {
+				Config.Regexplists = append(Config.Regexplists, []string{l[0], v})
+			}
+			return nil
+		},
 		"Hosts": func(l []string) error {
 			Config.Hosts = append(Config.Hosts, l...)
 			return nil
