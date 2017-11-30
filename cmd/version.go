@@ -15,7 +15,7 @@ var versionCmd = &cobra.Command{
 	Short: "Show program version and exit with code 0",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("0.1")
+		fmt.Println("0.2")
 	},
 }
 
