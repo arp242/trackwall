@@ -5,7 +5,7 @@
   branch = "master"
   name = "arp242.net/sconfig"
   packages = ["."]
-  revision = "3e81e0483e0f91c2adcf4588329a97147e1f0e5e"
+  revision = "733b9df4c03101676f9cbfab02c606078e4409ee"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -22,7 +22,10 @@
 [[projects]]
   branch = "master"
   name = "github.com/miekg/dns"
-  packages = [".","internal/socket"]
+  packages = [
+    ".",
+    "internal/socket"
+  ]
   revision = "cdb76b64a347436f019bf96ab5eb2d74e73e964b"
 
 [[projects]]

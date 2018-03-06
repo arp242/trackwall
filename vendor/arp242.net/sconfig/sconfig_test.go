@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -285,7 +284,7 @@ int64 46
 uint64 51
 bool yes
 bool2 true
-bool3 1
+bool3
 bool4 no
 float32 3.14
 float64 3.14159
@@ -481,12 +480,6 @@ func TestInvalidArray(t *testing.T) {
 
 }
 
-type testTypeHandlers struct {
-	Str  string
-	Reg  *regexp.Regexp
-	Regs []*regexp.Regexp
-}
-
 func TestInflect(t *testing.T) {
 	c := &struct {
 		Key    []string
@@ -527,6 +520,84 @@ func TestMapString(t *testing.T) {
 	if !reflect.DeepEqual(c["foo.bar"], []string{"a"}) {
 		t.Errorf("wrong output: %#v", c["foo.bar"])
 	}
+}
+
+func TestX(t *testing.T) {
+	f := testfile("hello one two three\nhello foo bar")
+	defer rm(t, f)
+
+	c := struct {
+		Hello []string
+	}{}
+	err := Parse(&c, f, Handlers{
+		"Hello": func(line []string) error {
+			fmt.Printf("%#v\n", line)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Printf("%#v\n", c)
+}
+
+func TestFields(t *testing.T) {
+	c := testPrimitives{Str: "init"}
+	names := Fields(&c)
+
+	v, ok := names["Str"]
+	if !ok {
+		t.Fatalf("Str not in map")
+	}
+	if v.Interface().(string) != "init" {
+		t.Fatalf("Str wrong value")
+	}
+
+	v.SetString("XXX")
+	if v.Interface().(string) != "XXX" {
+		t.Fatalf("Str wrong value")
+	}
+}
+
+type Marsh struct{ v string }
+
+func (m *Marsh) UnmarshalText(text []byte) error {
+	m.v = string(text)
+	if m.v == "error" {
+		return errors.New("error")
+	}
+	return nil
+}
+
+func TestTextUnmarshaler(t *testing.T) {
+	c := struct{ Field *Marsh }{}
+
+	t.Run("set value", func(t *testing.T) {
+		f := testfile("field !! ??")
+		defer rm(t, f)
+
+		err := Parse(&c, f, nil)
+		if err != nil {
+			t.Fatal("error", err)
+		}
+		if c.Field.v != "!! ??" {
+			t.Errorf("value wrong: %#v", c.Field.v)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		f := testfile("field error")
+		defer rm(t, f)
+
+		err := Parse(&c, f, nil)
+		if err == nil {
+			t.Fatal("error is nil")
+		}
+		if !strings.Contains(err.Error(), "line 1: error parsing field: error") {
+			t.Errorf("wrong error: %#v", err.Error())
+		}
+	})
 }
 
 // The MIT License (MIT)
