@@ -3,46 +3,85 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:a05ba0589b12e82b35ae2cd8c0a1a30c1a05e9c8eee38b32236bbe2d6d4853cc"
   name = "arp242.net/sconfig"
   packages = ["."]
-  revision = "733b9df4c03101676f9cbfab02c606078e4409ee"
+  pruneopts = ""
+  revision = "c014d3b7a10121ba6f0e9a863277ed3472eb19a0"
 
 [[projects]]
+  digest = "1:0deddd908b6b4b768cfc272c16ee61e7088a60f7fe2f06c547bd3d8e1f8b8e77"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
-  revision = "346938d642f2ec3594ed81d874461961cd0faa76"
-  version = "v1.1.0"
+  pruneopts = ""
+  revision = "8991bc29aa16c548c550c7ff78260e27b9ab7c73"
+  version = "v1.1.1"
 
 [[projects]]
+  digest = "1:870d441fe217b8e689d7949fef6e43efbc787e50f200cb1e70dbca9204a1d6be"
   name = "github.com/inconshreveable/mousetrap"
   packages = ["."]
+  pruneopts = ""
   revision = "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
   version = "v1.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:04543b8d4f9479f807b35ac61840c921b122f8e0a7d02ad06f19149c38ef9bd7"
   name = "github.com/miekg/dns"
-  packages = [
-    ".",
-    "internal/socket"
-  ]
-  revision = "cdb76b64a347436f019bf96ab5eb2d74e73e964b"
+  packages = ["."]
+  pruneopts = ""
+  revision = "9a34f54f7a0fff45ef7272ab019a25cc0b0aefbd"
 
 [[projects]]
   branch = "master"
+  digest = "1:0b0758d634c010c0eb9b57e0c44b74d783b59d3a987651c278ea6a3f5c6ad80f"
   name = "github.com/spf13/cobra"
   packages = ["."]
-  revision = "1be1d2841c773c01bee8289f55f7463b6e2c2539"
+  pruneopts = ""
+  revision = "99dc123558852f67743bd0b2caf8383cb3c6d720"
 
 [[projects]]
+  digest = "1:0a52bcb568386d98f4894575d53ce3e456f56471de6897bb8b9de13c33d9340e"
   name = "github.com/spf13/pflag"
   packages = ["."]
-  revision = "e57e3eeb33f795204c1ca35f56c44f83227c6e66"
-  version = "v1.0.0"
+  pruneopts = ""
+  revision = "9a97c102cda95a86cec2345a6f09f55a939babf5"
+  version = "v1.0.2"
+
+[[projects]]
+  branch = "master"
+  digest = "1:3ff237df1dca22c6296d2446c76ddcff8d359180ca53b8dcd301a44aa5c2f479"
+  name = "golang.org/x/crypto"
+  packages = [
+    "ed25519",
+    "ed25519/internal/edwards25519",
+  ]
+  pruneopts = ""
+  revision = "182538f80094b6a8efaade63a8fd8e0d9d5843dd"
+
+[[projects]]
+  branch = "master"
+  digest = "1:7dd0f1b8c8bd70dbae4d3ed3fbfaec224e2b27bcc0fc65882d6f1dba5b1f6e22"
+  name = "golang.org/x/net"
+  packages = [
+    "bpf",
+    "internal/iana",
+    "internal/socket",
+    "ipv4",
+    "ipv6",
+  ]
+  pruneopts = ""
+  revision = "8a410e7b638dca158bf9e766925842f6651ff828"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8f5bd166cbdde9b7fce90fe2f72ab02c5c12a949bf630401213b31f387105389"
+  input-imports = [
+    "arp242.net/sconfig",
+    "github.com/davecgh/go-spew/spew",
+    "github.com/miekg/dns",
+    "github.com/spf13/cobra",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

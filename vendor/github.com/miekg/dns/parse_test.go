@@ -433,6 +433,7 @@ func TestParseClass(t *testing.T) {
 		// ClassANY can not occur in zone files
 		// "t.example.com. ANY A 127.0.0.1": "t.example.com.	3600	ANY	A	127.0.0.1",
 		"t.example.com. NONE A 127.0.0.1": "t.example.com.	3600	NONE	A	127.0.0.1",
+		"t.example.com. CLASS255 A 127.0.0.1": "t.example.com.	3600	CLASS255	A	127.0.0.1",
 	}
 	for i, o := range tests {
 		rr, err := NewRR(i)
@@ -1104,6 +1105,7 @@ func TestNewPrivateKey(t *testing.T) {
 		{RSASHA1, 1024},
 		{RSASHA256, 2048},
 		{DSA, 1024},
+		{ED25519, 256},
 	}
 
 	for _, algo := range algorithms {
@@ -1402,6 +1404,22 @@ func TestParseAVC(t *testing.T) {
 		}
 		if rr.String() != o {
 			t.Errorf("`%s' should be equal to\n`%s', but is     `%s'", avc, o, rr.String())
+		}
+	}
+}
+
+func TestParseCSYNC(t *testing.T) {
+	syncs := map[string]string{
+		`example.com. 3600 IN CSYNC 66 3 A NS AAAA`: `example.com.	3600	IN	CSYNC	66 3 A NS AAAA`,
+	}
+	for s, o := range syncs {
+		rr, err := NewRR(s)
+		if err != nil {
+			t.Error("failed to parse RR: ", err)
+			continue
+		}
+		if rr.String() != o {
+			t.Errorf("`%s' should be equal to\n`%s', but is     `%s'", s, o, rr.String())
 		}
 	}
 }

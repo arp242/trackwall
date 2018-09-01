@@ -9,6 +9,8 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/ed25519"
 )
 
 // NewPrivateKey returns a PrivateKey by parsing the string s.
@@ -86,6 +88,8 @@ func (k *DNSKEY) ReadPrivateKey(q io.Reader, file string) (crypto.PrivateKey, er
 		}
 		priv.PublicKey = *pub
 		return priv, nil
+	case ED25519:
+		return readPrivateKeyED25519(m)
 	default:
 		return nil, ErrPrivKey
 	}
@@ -159,6 +163,27 @@ func readPrivateKeyECDSA(m map[string]string) (*ecdsa.PrivateKey, error) {
 				return nil, err
 			}
 			p.D.SetBytes(v1)
+		case "created", "publish", "activate":
+			/* not used in Go (yet) */
+		}
+	}
+	return p, nil
+}
+
+func readPrivateKeyED25519(m map[string]string) (ed25519.PrivateKey, error) {
+	var p ed25519.PrivateKey
+	// TODO: validate that the required flags are present
+	for k, v := range m {
+		switch k {
+		case "privatekey":
+			p1, err := fromBase64([]byte(v))
+			if err != nil {
+				return nil, err
+			}
+			if len(p1) != ed25519.SeedSize {
+				return nil, ErrPrivKey
+			}
+			p = ed25519.NewKeyFromSeed(p1)
 		case "created", "publish", "activate":
 			/* not used in Go (yet) */
 		}

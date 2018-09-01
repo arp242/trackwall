@@ -458,12 +458,12 @@ func TestTruncatedMsg(t *testing.T) {
 		t.Errorf("error should not be ErrTruncated from question cutoff unpack: %v", err)
 	}
 
-	// Finally, if we only have the header, we should still return an error
+	// Finally, if we only have the header, we don't return an error.
 	buf1 = buf[:12]
 
 	r = new(Msg)
-	if err = r.Unpack(buf1); err == nil || err != ErrTruncated {
-		t.Errorf("error not ErrTruncated from header-only unpack: %v", err)
+	if err = r.Unpack(buf1); err != nil {
+		t.Errorf("from header-only unpack should not return an error: %v", err)
 	}
 }
 
@@ -489,8 +489,8 @@ func TestTimeout(t *testing.T) {
 	done := make(chan struct{}, 2)
 
 	timeout := time.Millisecond
-	allowable := timeout + (10 * time.Millisecond)
-	abortAfter := timeout + (100 * time.Millisecond)
+	allowable := timeout + 10*time.Millisecond
+	abortAfter := timeout + 100*time.Millisecond
 
 	start := time.Now()
 
@@ -587,4 +587,24 @@ func TestConcurrentExchanges(t *testing.T) {
 			t.Errorf("got same response, expected non-shared responses")
 		}
 	}
+}
+
+func TestDoHExchange(t *testing.T) {
+	const addrstr = "https://dns.cloudflare.com/dns-query"
+
+	m := new(Msg)
+	m.SetQuestion("miek.nl.", TypeSOA)
+
+	cl := &Client{Net: "https"}
+
+	r, _, err := cl.Exchange(m, addrstr)
+	if err != nil {
+		t.Fatalf("failed to exchange: %v", err)
+	}
+
+	if r == nil || r.Rcode != RcodeSuccess {
+		t.Errorf("failed to get an valid answer\n%v", r)
+	}
+
+	// TODO: proper tests for this
 }

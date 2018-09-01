@@ -16,10 +16,11 @@ Many of the most widely used Go projects are built using Cobra including:
 * [CockroachDB](http://www.cockroachlabs.com/)
 * [Bleve](http://www.blevesearch.com/)
 * [ProjectAtomic (enterprise)](http://www.projectatomic.io/)
-* [GiantSwarm's swarm](https://github.com/giantswarm/cli)
+* [Giant Swarm's gsctl](https://github.com/giantswarm/gsctl)
 * [Nanobox](https://github.com/nanobox-io/nanobox)/[Nanopack](https://github.com/nanopack)
 * [rclone](http://rclone.org/)
 * [nehm](https://github.com/bogem/nehm)
+* [Pouch](https://github.com/alibaba/pouch)
 
 [![Build Status](https://travis-ci.org/spf13/cobra.svg "Travis CI status")](https://travis-ci.org/spf13/cobra)
 [![CircleCI status](https://circleci.com/gh/spf13/cobra.png?circle-token=:circle-token "CircleCI status")](https://circleci.com/gh/spf13/cobra)
@@ -151,8 +152,6 @@ In a Cobra app, typically the main.go file is very bare. It serves one purpose: 
 package main
 
 import (
-  "fmt"
-  "os"
 
   "{pathToYourApp}/cmd"
 )
@@ -190,6 +189,13 @@ var rootCmd = &cobra.Command{
   Run: func(cmd *cobra.Command, args []string) {
     // Do Stuff Here
   },
+}
+
+func Execute() {
+  if err := rootCmd.Execute(); err != nil {
+    fmt.Println(err)
+    os.Exit(1)
+  }
 }
 ```
 
@@ -336,8 +342,8 @@ rootCmd.Flags().StringVarP(&Source, "source", "s", "", "Source directory to read
 
 ### Local Flag on Parent Commands
 
-By default Cobra only parses local flags on the target command, any local flags on 
-parent commands are ignored. By enabling `Command.TraverseChildren` Cobra will 
+By default Cobra only parses local flags on the target command, any local flags on
+parent commands are ignored. By enabling `Command.TraverseChildren` Cobra will
 parse local flags on each command before executing the target command.
 
 ```go
@@ -364,6 +370,15 @@ In this example the persistent flag `author` is bound with `viper`.
 when the `--author` flag is not provided by user.
 
 More in [viper documentation](https://github.com/spf13/viper#working-with-flags).
+
+### Required flags
+
+Flags are optional by default. If instead you wish your command to report an error
+when a flag has not been set, mark it as required:
+```go
+rootCmd.Flags().StringVarP(&Region, "region", "r", "", "AWS region (required)")
+rootCmd.MarkFlagRequired("region")
+```
 
 ## Positional and Custom Arguments
 
@@ -559,6 +574,13 @@ Like help, the function and template are overridable through public methods:
 cmd.SetUsageFunc(f func(*Command) error)
 cmd.SetUsageTemplate(s string)
 ```
+
+## Version Flag
+
+Cobra adds a top-level '--version' flag if the Version field is set on the root command.
+Running an application with the '--version' flag will print the version to stdout using
+the version template. The template can be customized using the
+`cmd.SetVersionTemplate(s string)` function.
 
 ## PreRun and PostRun Hooks
 
