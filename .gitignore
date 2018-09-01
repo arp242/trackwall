@@ -1,3 +1,2 @@
-.nfs*
-/trackwall
 /coverage.txt
+.DS_Store

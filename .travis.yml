@@ -1,16 +1,16 @@
 language: go
 go:
-  - 1.8.x
-  - 1.9.x
+  - 1.11.x
 go_import_path: arp242.net/trackwall
 notifications:
   email: false
 cache:
   directories:
-    - $HOME/gopath/pkg
-install: []
+    - $HOME/.cache/go-build
+install:
+  - ./bin/setup-travis
 script:
   - cd $HOME/gopath/src/arp242.net/trackwall
-  - ./bin/test
-  - ./bin/coverage
-  - ./bin/lint
+  - "[ -f go.sum ] && export GO111MODULE=on"
+  - ./bin/coverage -race ./...
+  - ./bin/lint ./...

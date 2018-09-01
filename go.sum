@@ -1,0 +1,16 @@
+arp242.net/sconfig v0.0.0-20180901013357-c014d3b7a101 h1:V6CYq+es2ncUeJ2jzJxWVviAs7iNW/jvPb4+3LHOXsE=
+arp242.net/sconfig v0.0.0-20180901013357-c014d3b7a101/go.mod h1:s7teWAlHUlC2xRICC2FKERk6kQBI9lREHKRfWIWF+lA=
+github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/inconshreveable/mousetrap v1.0.0 h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NHg9XEKhtSvM=
+github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
+github.com/miekg/dns v0.0.0-20180830064133-9a34f54f7a0f h1:4kqdo3CkDxKC9trJ4FTQTjX5AWCUYs4xisiay0rkM3A=
+github.com/miekg/dns v0.0.0-20180830064133-9a34f54f7a0f/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
+github.com/spf13/cobra v0.0.0-20180829160745-99dc12355885 h1:/QQvE738d0yERA4B+d1WcV8+amUA3dOIc6PQJp9UKQw=
+github.com/spf13/cobra v0.0.0-20180829160745-99dc12355885/go.mod h1:1l0Ry5zgKvJasoi3XT1TypsSe7PqH0Sj9dhYf7v3XqQ=
+github.com/spf13/pflag v1.0.2 h1:Fy0orTDgHdbnzHcsOgfCN4LtHf0ec3wwtiwJqwvf3Gc=
+github.com/spf13/pflag v1.0.2/go.mod h1:DYY7MBk1bdzusC3SYhjObp+wFpr4gzcvqqNjLnInEg4=
+golang.org/x/crypto v0.0.0-20180830192347-182538f80094 h1:rVTAlhYa4+lCfNxmAIEOGQRoD23UqP72M3+rSWVGDTg=
+golang.org/x/crypto v0.0.0-20180830192347-182538f80094/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
+golang.org/x/net v0.0.0-20180826012351-8a410e7b638d h1:g9qWBGx4puODJTMVyoPrpoxPFgVGd+z1DZwjfRu4d0I=
+golang.org/x/net v0.0.0-20180826012351-8a410e7b638d/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=

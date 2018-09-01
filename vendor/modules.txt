@@ -1,0 +1,21 @@
+# arp242.net/sconfig v0.0.0-20180901013357-c014d3b7a101
+arp242.net/sconfig
+# github.com/davecgh/go-spew v1.1.1
+github.com/davecgh/go-spew/spew
+# github.com/inconshreveable/mousetrap v1.0.0
+github.com/inconshreveable/mousetrap
+# github.com/miekg/dns v0.0.0-20180830064133-9a34f54f7a0f
+github.com/miekg/dns
+# github.com/spf13/cobra v0.0.0-20180829160745-99dc12355885
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.2
+github.com/spf13/pflag
+# golang.org/x/crypto v0.0.0-20180830192347-182538f80094
+golang.org/x/crypto/ed25519
+golang.org/x/crypto/ed25519/internal/edwards25519
+# golang.org/x/net v0.0.0-20180826012351-8a410e7b638d
+golang.org/x/net/ipv4
+golang.org/x/net/ipv6
+golang.org/x/net/bpf
+golang.org/x/net/internal/iana
+golang.org/x/net/internal/socket
