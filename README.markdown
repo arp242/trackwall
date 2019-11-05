@@ -1,6 +1,33 @@
-[![This project is considered experimental](https://img.shields.io/badge/Status-experimental-red.svg)](https://arp242.net/status/experimental)
+[![This project is archived](https://img.shields.io/badge/Status-archived-red.svg)](https://arp242.net/status/archived)
 [![Build Status](https://travis-ci.org/Carpetsmoker/trackwall.svg?branch=master)](https://travis-ci.org/Carpetsmoker/trackwall)
 [![codecov](https://codecov.io/gh/Carpetsmoker/trackwall/branch/master/graph/badge.svg)](https://codecov.io/gh/Carpetsmoker/trackwall)
+
+**This project is archived**; I still think trackwall is a neat project with a
+lot of potential, but unfortunately various changes to the web make everything
+harder compared to late 2015 when I first started this:
+
+- Browsers ignoring short TTLs makes the management/unblocking of URLs tricky
+  (this has always been a problem).
+
+- Intercepting HTTPS connections and serving stubs worked well a few years ago,
+  but with strict transport security – which is intended exactly to prevent
+  these kind of MITM tricks – it's much harder.
+
+- Encrypted DNS (e.g. DNS-over-HTTP) makes everything much harder. I'm using
+  this myself since the Indonesian government blocks access to various sites on
+  the DNS level (because Netflix has LGBT content; sigh), and this is an easy
+  way to circumvent it.
+
+These problems are probably fixable to some degree, but it would be quite a bit
+of effort and don't really have the time at the moment. Additionally,
+[Pi-hole](https://pi-hole.net) now seems like an established project, so not
+sure if it's worth the effort developing an alternative (although I have not
+used it myself so this is not an endorsement, and I don't know to which degree
+it solves the above problems. I just use uBlock Origin in Firefox now.)
+
+Original README below.
+
+---
 
 DNS proxy and filter.
 
